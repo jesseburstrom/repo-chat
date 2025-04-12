@@ -1,30 +1,163 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files and files not matching ignore patterns, combined into a single document by Repomix.
+
+<directory_structure>
+backend/server.ts
+backend/src/server.ts
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="backend/server.ts">
+// server.ts
+import express, { Request, Response } from 'express';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+import * as path from 'path';
+import * as https from 'https';
+import * as fs from 'fs'; // <-- Add fs import
+import { exec } from 'child_process'; // <-- Add child_process import
+import FormData from 'form-data';
+import { IncomingMessage } from 'http';
+import * as dotenv from 'dotenv';
+
+dotenv.config({ path: path.resolve(__dirname, '.env.local') });
+
+const apiKey: string = process.env.OPENAI_API_KEY as string;
+// Assume OPENAI_API_KEY check is already done
+
+// --- Globals / State ---
+const conversations: Record<string, { /* ... */ }> = {};
+let currentConversationName: string | null = null;
+const GENERATED_FILES_DIR = path.join(__dirname, 'generated_files'); // Define output directory
+const REPOMIX_OUTPUT_FILENAME = 'full_description.md'; // Predefined output filename
+
+// --- Ensure output directory exists ---
+if (!fs.existsSync(GENERATED_FILES_DIR)) {
+  console.log(`Creating directory for generated files: ${GENERATED_FILES_DIR}`);
+  fs.mkdirSync(GENERATED_FILES_DIR, { recursive: true });
+}
+// --- End Directory Setup ---
+
+
+const app = express();
+app.use(cors({
+  // ... cors options
+}));
+const port = 8002;
+const base_route = '/assistant';
+
+app.use(bodyParser.json({ limit: '50mb' }));
+
+// --- OpenAI API Call Helpers (Keep existing functions) ---
+// async function makeOpenAIRequest ...
+// async function uploadFile ...
+// async function createResponse ...
+// async function getResponse ...
+// async function deleteResponse ...
+// function extractTextFromResponse ...
+
+// --- Express Routes ---
+
+// ... (Keep existing routes: /start-conversation, /interact, /delete-conversation, etc.) ...
+
+
+// --- NEW Repomix Endpoint ---
+interface RunRepomixRequestBody {
+    repoUrl: string;
+    includePatterns?: string; // Comma-separated string
+    excludePatterns?: string; // Comma-separated string
+}
+
+app.post(base_route + '/run-repomix', (req: Request<{}, {}, RunRepomixRequestBody>, res: Response) => {
+    const { repoUrl, includePatterns, excludePatterns } = req.body;
+
+    if (!repoUrl) {
+        return res.status(400).json({ success: false, error: 'repoUrl is required' });
+    }
+
+    const outputPath = path.join(GENERATED_FILES_DIR, REPOMIX_OUTPUT_FILENAME);
+
+    // --- Construct the repomix command ---
+    // IMPORTANT: Ensure 'repomix' is in your server's PATH or provide the full path.
+    // Using npx might be safer if repomix is a project dependency: `npx repomix ...`
+    // This example assumes 'repomix' is globally available in the PATH.
+    let command = `repomix --remote "${repoUrl}" --output "${outputPath}" --no-file-summary`; // Base command
+
+    if (includePatterns) {
+        command += ` --include "${includePatterns}"`;
+    }
+    if (excludePatterns) {
+        command += ` --ignore "${excludePatterns}"`; // repomix uses --ignore
+    }
+
+    console.log(`Executing Repomix: ${command}`);
+
+    // --- Execute the command ---
+    exec(command, (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Repomix execution error: ${error.message}`);
+            console.error(`Repomix stderr: ${stderr}`);
+            // Try to delete partial output file on error
+            if (fs.existsSync(outputPath)) {
+                 try { fs.unlinkSync(outputPath); } catch (e) { console.error("Failed to delete partial output file:", e); }
+            }
+            return res.status(500).json({
+                success: false,
+                error: `Repomix execution failed: ${error.message}`,
+                stderr: stderr
+            });
+        }
+
+        if (stderr) {
+            // Repomix might write warnings to stderr even on success
+            console.warn(`Repomix stderr output: ${stderr}`);
+        }
+
+        console.log(`Repomix stdout: ${stdout}`);
+        console.log(`Repomix successfully generated: ${outputPath}`);
+
+        // --- Check if file was actually created ---
+        if (!fs.existsSync(outputPath)) {
+             console.error(`Repomix command finished but output file not found: ${outputPath}`);
+             return res.status(500).json({
+                 success: false,
+                 error: 'Repomix finished but the output file was not created.',
+                 stdout: stdout,
+                 stderr: stderr
+             });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Repomix completed. Output saved to server as ${REPOMIX_OUTPUT_FILENAME}. Please attach this file manually.`,
+            outputFilename: REPOMIX_OUTPUT_FILENAME // Send back the filename
+            // DO NOT send file content here - let user attach it.
+        });
+    });
+});
+// --- End Repomix Endpoint ---
+
+
+// --- Static Files & Fallback (Keep existing) ---
+// app.use(...)
+// app.get('*', ...)
+
+// --- Server Start (Keep existing) ---
+// app.listen(...)
+
+// --- Export necessary functions if you split files later ---
+// (Currently not needed as it's one file)
+</file>
+
+<file path="backend/src/server.ts">
 // repomix-server/src/server.ts
-import express, { Request, Response, NextFunction } from 'express'; // <-- Import RequestHandler
+import express, { Request, Response, NextFunction, RequestHandler } from 'express'; // <-- Import RequestHandler
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import * as path from 'path';
 import * as fs from 'fs';
 import { exec } from 'child_process';
-import * as dotenv from 'dotenv';
-
-dotenv.config();
-
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GenerationConfig, Content, FinishReason, SafetyRating } from "@google/generative-ai";
-
-const geminiApiKey: string = process.env.GEMINI_API_KEY as string;
-if (!geminiApiKey) {
-  console.error("FATAL: GEMINI_API_KEY not found in server environment variables.");
-  process.exit(1);
-}
-
-const genAI = new GoogleGenerativeAI(geminiApiKey);
-const generationConfig: GenerationConfig = { /* ... your config ... */ };
-const safetySettings = [ /* ... your settings ... */ ];
-const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-pro-exp-03-25",
-    // safetySettings, // Apply safety settings if needed
-    generationConfig,
-});
 
 const app = express();
 const port = 8003; // Use a different port than the React app
@@ -203,77 +336,6 @@ const handleRunRepomix = (
     // without needing to wrap the whole thing in an async/await structure for this case.
 };
 
-interface CallGeminiRequestBody {
-    history: Content[]; // Expect history in the correct format
-    newMessage: string;
-}
-
-const handleCallGemini = async ( // Keep async
-    // Type parameters directly
-    req: Request<{}, {}, CallGeminiRequestBody>,
-    res: Response,
-    next: NextFunction
-): Promise<void> => { // Explicitly declare it returns Promise<void>
-    const { history, newMessage } = req.body;
-
-    if (!newMessage) {
-        res.status(400).json({ success: false, error: 'newMessage is required.' });
-        return; // Return void
-    }
-    if (!Array.isArray(history)) {
-         res.status(400).json({ success: false, error: 'history must be an array.' });
-         return; // Return void
-    }
-
-    console.log("Received Gemini request. History length:", history.length, "New message:", newMessage.substring(0, 50) + "...");
-
-    try {
-         const chatSession = model.startChat({ history });
-         const result = await chatSession.sendMessage(newMessage);
-         const response = result.response;
-
-         // --- Detailed error/block handling ---
-         if (response.promptFeedback?.blockReason) {
-             const reason = response.promptFeedback.blockReason;
-             console.error(`Gemini Prompt blocked: ${reason}`);
-             res.status(400).json({ success: false, error: `Prompt blocked by safety filter: ${reason}` });
-             return; // Return void
-         }
-         const candidates = response.candidates;
-          if (!candidates || candidates.length === 0) {
-              console.error("Gemini returned no candidates.");
-              res.status(500).json({ success: false, error: 'Gemini API returned no response candidates.' });
-              return; // Return void
-          }
-          const firstCandidate = candidates[0];
-          if (firstCandidate.finishReason && firstCandidate.finishReason !== FinishReason.STOP) {
-               console.error(`Gemini response stopped: ${firstCandidate.finishReason}`);
-               res.status(400).json({ success: false, error: `Response stopped due to ${firstCandidate.finishReason}` });
-               return; // Return void
-          }
-          if (!firstCandidate.content?.parts || firstCandidate.content.parts.length === 0 || !firstCandidate.content.parts.some(p => p.text)) {
-              console.error("Gemini returned no text content.");
-              res.status(500).json({ success: false, error: 'Gemini API returned no text content.' });
-              return; // Return void
-          }
-         // --- End checks ---
-
-         const responseText = response.text();
-         res.status(200).json({ success: true, text: responseText });
-         // Implicit void return after sending response
-
-    } catch (error: any) {
-        console.error("Error calling Gemini API on server:", error);
-        // Pass error to middleware, this implicitly returns void from the catch block
-        next(error);
-    }
-    // The async function implicitly returns Promise<void> if all paths either
-    // return void, don't return anything (implicitly void), or throw/call next().
-};
-
-// Use the async handler constant
-app.post('/call-gemini', handleCallGemini);
-// --- End Gemini Proxy Endpoint ---
 // Use the handler in app.post (no change needed here)
 app.post('/run-repomix', handleRunRepomix);
 
@@ -287,3 +349,6 @@ app.listen(port, () => {
     console.log(`Repomix server listening on http://localhost:${port}`);
     console.log(`Repomix output will be saved to: ${GENERATED_FILES_DIR}`);
 });
+</file>
+
+</files>

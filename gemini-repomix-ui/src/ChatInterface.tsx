@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { getHighlighter, bundledLanguages } from 'shikiji'; // Import from shikiji
 import type { Highlighter } from 'shikiji'; // Import type
 
-import { ChatMessage } from './api';
+import { ChatMessage } from './App';
 import './ChatInterface.css'; // Keep your existing CSS for overall layout
 
 // --- Shikiji Highlighter Setup ---

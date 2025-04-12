@@ -3,9 +3,15 @@ import { useState, useCallback } from 'react';
 import ChatInterface from './ChatInterface';
 import InputArea from './InputArea';
 import RepomixForm from './RepomixForm'; // <-- Use the form again
-import { callGeminiApi, ChatMessage } from './api';
-import { Content } from "@google/generative-ai";
 import './App.css';
+
+// Define ChatMessage type locally now or in a types file
+export interface ChatMessage {
+  role: "user" | "model";
+  parts: [{ text: string }];
+}
+var prefix = '';
+//prefix = '/repochat';
 
 const MAX_HISTORY_TURNS = 5;
 // const REPOMIX_SERVER_URL = 'http://localhost:8003'; // <-- URL of the new server
@@ -65,11 +71,11 @@ function App() {
         // Clear any manually attached file when generating a new one
         clearAttachedFile();
 
-        console.log(`Sending request to Repomix server: /repochat/api/run-repomix`);
-
+        //console.log(`Sending request to Repomix server: /repochat/api/run-repomix`);
+        
         try {
             // *** USE RELATIVE NGINX PATH ***
-            const response = await fetch(`/repochat/api/run-repomix`, { // Correct path Nginx listens on
+            const response = await fetch(`${prefix}/api/run-repomix`, { // Correct path Nginx listens on
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -100,53 +106,72 @@ function App() {
 
 
   const handlePromptSubmit = useCallback(async (prompt: string) => {
-      // ... (Keep the prompt submission logic exactly as it was in the previous step) ...
-       if (!prompt && !attachedFileContent) {
-          setError("Please type a prompt or attach the generated description file.");
-          return;
-      }
-      setIsLoading(true);
-      setError(null);
+    if (!prompt && !attachedFileContent) {
+      setError("Please type a prompt or attach the generated description file.");
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
 
-      let messageToSendToApi = "";
-      if (attachedFileContent) {
-          messageToSendToApi += `Attached File Content (${attachedFileName || 'full_description.md'}):\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
-      }
-       if (prompt) {
-          messageToSendToApi += `User Prompt: ${prompt}`;
-       } else {
-           messageToSendToApi += `User Prompt: Please analyze the attached file content.`;
-       }
+    let combinedPrompt = ""; // Build the full message content for the backend
+    if (attachedFileContent) {
+        combinedPrompt += `Attached File Content (${attachedFileName || 'full_description.md'}):\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
+    }
+    if (prompt) {
+        combinedPrompt += `User Prompt: ${prompt}`;
+    } else {
+        combinedPrompt += `User Prompt: Please analyze the attached file content.`;
+    }
 
-      const userDisplayPrompt = prompt || `(Using attached file: ${attachedFileName})`;
-      const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userDisplayPrompt }] };
-      const currentHistory = [...chatHistory, newUserMessage];
-      setChatHistory(currentHistory);
+    const userDisplayPrompt = prompt || `(Using attached file: ${attachedFileName})`;
+    const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userDisplayPrompt }] };
+    const currentHistory = [...chatHistory, newUserMessage];
+    setChatHistory(currentHistory); // Optimistic UI update
 
-      const historyForApi: Content[] = chatHistory
+
+      // Prepare history for the BACKEND proxy endpoint
+      // Use the local ChatMessage format, the backend can handle it
+      const historyForBackend: ChatMessage[] = chatHistory
         .slice(-MAX_HISTORY_TURNS * 2)
-        .map(msg => ({ role: msg.role, parts: msg.parts }));
+        .map(msg => ({ // Ensure it matches ChatMessage structure if needed
+          role: msg.role,
+          parts: msg.parts,
+        }));
 
-      console.log("History being sent to API:", historyForApi);
-      console.log("Message being sent to API:", messageToSendToApi);
-
+      console.log("Sending request to Backend Gemini Proxy");
+      
       try {
-          const responseText = await callGeminiApi(historyForApi, messageToSendToApi);
-          const newModelMessage: ChatMessage = { role: 'model', parts: [{ text: responseText }] };
+          // *** CALL YOUR BACKEND PROXY ENDPOINT ***
+          const response = await fetch(`${prefix}/api/call-gemini`, { // Adjust path if needed based on Nginx
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                  // Send history and the combined new message
+                  history: historyForBackend, // Send previous turns
+                  newMessage: combinedPrompt,  // Send the full new content
+              }),
+          });
+
+          const result = await response.json();
+
+          if (!response.ok || !result.success) {
+              throw new Error(result.error || `API proxy error ${response.status}`);
+          }
+
+          const newModelMessage: ChatMessage = { role: 'model', parts: [{ text: result.text }] };
           setChatHistory(prev => [...prev, newModelMessage]);
-          // Optionally clear file after use:
-          // clearAttachedFile();
+          clearAttachedFile(); // Clear file on success
+
       } catch (apiError: any) {
-          setError(`API Error: ${apiError.message}`);
+          setError(`Error: ${apiError.message}`);
+          // Rollback optimistic UI update
           setChatHistory(prev => prev.slice(0, -1));
       } finally {
           setIsLoading(false);
-          // Clear file ONLY if successful and you want single-use
-           if (!error) {
-               clearAttachedFile(); // Example: clear on success
-           }
       }
-  }, [chatHistory, attachedFileContent, attachedFileName, clearAttachedFile, error]);
+  }, [chatHistory, attachedFileContent, attachedFileName, clearAttachedFile]);
 
 
   return (
