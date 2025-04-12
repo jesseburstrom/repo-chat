@@ -11,7 +11,7 @@ export interface ChatMessage {
   parts: [{ text: string }];
 }
 var prefix = '';
-//prefix = '/repochat';
+prefix = '/repochat';
 
 const MAX_HISTORY_TURNS = 5;
 // const REPOMIX_SERVER_URL = 'http://localhost:8003'; // <-- URL of the new server
