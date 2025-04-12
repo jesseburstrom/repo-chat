@@ -8,7 +8,7 @@ import { Content } from "@google/generative-ai";
 import './App.css';
 
 const MAX_HISTORY_TURNS = 5;
-const REPOMIX_SERVER_URL = 'http://localhost:8003'; // <-- URL of the new server
+// const REPOMIX_SERVER_URL = 'http://localhost:8003'; // <-- URL of the new server
 
 function App() {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -65,11 +65,11 @@ function App() {
         // Clear any manually attached file when generating a new one
         clearAttachedFile();
 
-        console.log(`Sending request to Repomix server: ${REPOMIX_SERVER_URL}/run-repomix`);
+        console.log(`Sending request to Repomix server: /repochat/api/run-repomix`);
 
         try {
-            // *** POINT TO THE NEW SERVER ***
-            const response = await fetch(`${REPOMIX_SERVER_URL}/run-repomix`, {
+            // *** USE RELATIVE NGINX PATH ***
+            const response = await fetch(`/repochat/api/run-repomix`, { // Correct path Nginx listens on
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
