@@ -128,14 +128,15 @@ const handleRunRepomix = (
     console.log(`Target output path: ${fullDynamicOutputPath}`);
     // --- End Filename Generation ---
 
-    // Command construction logic... uses fullDynamicOutputPath now
-    const repomixExecutable = "repomix";
+    // --- Use npx to execute local repomix ---
+    const repomixExecutable = "npx repomix"; // Use npx
+
     let command = `${repomixExecutable} --remote "${repoUrl}" --output "${fullDynamicOutputPath}" --no-file-summary`; // Use dynamic path
     if (includePatterns) command += ` --include "${includePatterns}"`;
     if (excludePatterns) command += ` --ignore "${excludePatterns}"`;
 
-    console.log(`Executing Repomix: ${command}`);
-
+    console.log(`Executing Repomix via npx: ${command}`); // Updated log message
+    
     // Delete existing file logic...
     if (fs.existsSync(fullDynamicOutputPath)) {
         try {
