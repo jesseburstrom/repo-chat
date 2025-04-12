@@ -1,0 +1,71 @@
+/* src/App.css */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: #f0f2f5; /* Light gray background for the whole page */
+  font-family: 'Roboto', 'Helvetica Neue', sans-serif; /* Or your preferred font */
+}
+
+#root { /* Target the root element Vite mounts to */
+    height: 100%;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* Full viewport height */
+  width: 75%;   /* Occupy 85% of the viewport width */
+  margin: 0 auto; /* Center the container horizontally */
+  background-color: #ffffff; /* White background for the chat area */
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); /* Subtle shadow */
+  border-left: 1px solid #e0e0e0; /* Optional border */
+  border-right: 1px solid #e0e0e0; /* Optional border */
+  /* Remove overflow: hidden; if you had it */
+}
+
+.app-header {
+   padding: 15px 25px; /* Slightly more padding */
+   border-bottom: 1px solid #e0e0e0;
+   background-color: #fff;
+   text-align: center;
+   flex-shrink: 0; /* Prevent header from shrinking */
+   font-size: 1.4em;
+   font-weight: 500;
+   color: #333;
+}
+
+.chat-scroll-area {
+  flex-grow: 1; /* Takes up remaining space */
+  overflow-y: auto; /* Allows scrolling */
+  padding: 25px; /* Increase padding inside scroll area */
+  display: flex;
+  flex-direction: column;
+  background-color: #ffffff;
+}
+
+ .loading-indicator, .error-message {
+    text-align: center;
+    padding: 15px; /* More padding */
+    color: #666;
+    font-style: italic;
+ }
+
+ .error-message {
+    color: #d93025; /* Red for errors */
+    font-weight: bold;
+ }
+
+
+.app-footer {
+  padding: 8px 25px; /* Match chat area padding */
+  border-top: 1px solid #e0e0e0;
+  background-color: #f8f9fa; /* Slightly different footer background */
+  font-size: 0.8em;
+  color: #666;
+  text-align: right;
+  flex-shrink: 0; /* Prevent footer from shrinking */
+}
+
+/* Add font import if needed at the top of index.css or App.css */
+/* @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap'); */

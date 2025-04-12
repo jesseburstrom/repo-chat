@@ -1,0 +1,91 @@
+/* src/InputArea.css */
+.input-area-container {
+    padding: 15px 20px;
+    background-color: #fff;
+    border-top: 1px solid #e0e0e0;
+  }
+  
+  .input-form {
+    display: flex;
+    align-items: flex-end; /* Align items to bottom for textarea expansion */
+    gap: 10px;
+    border: 1px solid #dadce0;
+    border-radius: 24px; /* Rounded corners */
+    padding: 8px 15px;
+     background-color: #f8f9fa; /* Slightly different background for input area */
+  }
+  
+  
+   .attach-button {
+      background: none;
+      border: none;
+      padding: 5px;
+      cursor: pointer;
+      font-size: 1.5em;
+      color: #5f6368;
+      align-self: center; /* Center vertically */
+   }
+  
+   .attach-button:hover {
+      color: #202124;
+   }
+  
+   .attach-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+   }
+  
+  .prompt-input {
+    flex-grow: 1;
+    border: none;
+    outline: none;
+    resize: none; /* Prevent manual resize */
+    font-family: inherit;
+    font-size: 1rem;
+    background-color: transparent; /* Inherit background */
+    padding: 8px 0; /* Adjust padding */
+    line-height: 1.5;
+     max-height: 150px; /* Limit max height */
+     overflow-y: auto; /* Add scroll if it exceeds max height */
+     min-height: 24px; /* Ensure it doesn't collapse too small */
+  }
+  
+  .prompt-input:disabled {
+      background-color: #eee; /* Indicate disabled state */
+  }
+  
+  .submit-button {
+    background-color: #1a73e8; /* Google blue */
+    color: white;
+    border: none;
+    border-radius: 18px;
+    padding: 8px 18px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.9em;
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  
+  .submit-button:hover:not(:disabled) {
+    background-color: #185abc;
+  }
+  
+  .submit-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+  
+  .shortcut {
+      font-size: 0.8em;
+      opacity: 0.7;
+  }
+  
+  .attached-file-indicator {
+      font-size: 0.8em;
+      color: #5f6368;
+      margin-top: 5px;
+      padding-left: 5px;
+  }

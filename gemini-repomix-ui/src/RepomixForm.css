@@ -1,0 +1,88 @@
+/* src/RepomixForm.css */
+.repomix-form-container {
+    padding: 15px 25px;
+    border-bottom: 1px solid #e0e0e0;
+    background-color: #f8f9fa; /* Slightly different background */
+}
+
+.repomix-form-container h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #333;
+    font-weight: 500;
+}
+
+.repomix-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.form-group label {
+    font-size: 0.9em;
+    color: #5f6368;
+    font-weight: 500;
+}
+
+.form-group input[type="text"],
+.form-group input[type="url"] {
+    padding: 8px 10px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-family: inherit;
+}
+
+.form-group input:disabled {
+    background-color: #eee;
+}
+
+
+.repomix-form button {
+  /* Basic button styling - copy from your App.css or index.css if needed */
+  /* Example: */
+  background-color: #1a73e8;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 15px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 1em;
+  transition: background-color 0.2s ease;
+  align-self: flex-start; /* Align button to the left */
+}
+
+.repomix-form button:hover:not(:disabled) {
+  background-color: #185abc;
+}
+
+.repomix-form button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.generation-status {
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.generation-status.success {
+    background-color: #e6f4ea;
+    color: #137333;
+    border: 1px solid #a8d1b4;
+}
+
+.generation-status.error {
+    background-color: #fce8e6;
+    color: #c5221f;
+    border: 1px solid #f4aca9;
+}
