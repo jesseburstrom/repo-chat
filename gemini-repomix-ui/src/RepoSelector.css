@@ -1,0 +1,33 @@
+/* src/RepoSelector.css */
+.repo-selector-container {
+    padding: 15px 25px;
+    border-bottom: 1px solid #e0e0e0;
+    background-color: #f8f9fa;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.repo-selector-container label {
+    font-size: 0.9em;
+    color: #5f6368;
+    font-weight: 500;
+    white-space: nowrap; /* Prevent label wrapping */
+}
+
+.repo-selector-container select {
+    flex-grow: 1; /* Take remaining space */
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-family: inherit;
+    background-color: #fff;
+    cursor: pointer;
+}
+
+.repo-selector-container select:disabled {
+    background-color: #eee;
+    cursor: not-allowed;
+    opacity: 0.7;
+}

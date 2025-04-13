@@ -16,8 +16,8 @@ const RepomixForm: React.FC<RepomixFormProps> = ({
     generationError,
 }) => {
     const [repoUrl, setRepoUrl] = useState('');
-    // Default values similar to your python example
-    const [includePatterns, setIncludePatterns] = useState('lib/**/*.dart,backend/**/*.ts,unity/**/*.cs');
+    // Default values 
+    const [includePatterns, setIncludePatterns] = useState('**/*.dart,**/*.ts,**/*.tsx,**/*.py,**/*.cs');
     const [excludePatterns, setExcludePatterns] = useState('*.log,tmp/'); // repomix uses --ignore
 
     const handleSubmit = (event: React.FormEvent) => {

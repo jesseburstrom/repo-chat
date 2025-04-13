@@ -4,6 +4,7 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import * as path from 'path';
 import * as fs from 'fs';
+import { constants as fsConstants } from 'fs'; 
 import { exec } from 'child_process';
 import * as dotenv from 'dotenv';
 
@@ -28,6 +29,22 @@ const model = genAI.getGenerativeModel({
 
 const app = express();
 const port = 8003; // Use a different port than the React app
+
+// --- CORS Configuration ---
+// Be specific in production. For development, allow React dev server origin.
+const corsOptions = {
+    origin: ['http://localhost:5173', 'https://fluttersystems.com'], // Allow React dev server and your potential prod domain
+    methods: ['POST', 'OPTIONS'], // Only allow POST and OPTIONS pre-flight
+    allowedHeaders: ['Content-Type'],
+};
+app.use(cors(corsOptions));
+
+// --- Increase Body Parser Limit ---
+// Apply BEFORE your routes that handle large POST bodies
+app.use(bodyParser.json({ limit: '10mb' })); // Increase limit (e.g., to 10MB)
+app.use(bodyParser.urlencoded({ limit: '10mb', extended: true })); // For urlencoded bodies too, if needed
+// --- End Body Parser Limit Increase ---
+
 
 const GENERATED_FILES_DIR = path.resolve(__dirname, '..', '..', 'generated_files');
 const BASE_FILENAME = 'full_description'; // Base part of the filename
@@ -72,17 +89,6 @@ function generateFilenameFromUrl(repoUrl: string): { success: boolean; filename?
 }
 // --- End Helper Function ---
 
-// --- CORS Configuration ---
-// Be specific in production. For development, allow React dev server origin.
-const corsOptions = {
-    origin: ['http://localhost:5173', 'https://fluttersystems.com'], // Allow React dev server and your potential prod domain
-    methods: ['POST', 'OPTIONS'], // Only allow POST and OPTIONS pre-flight
-    allowedHeaders: ['Content-Type'],
-};
-app.use(cors(corsOptions));
-
-// --- Middleware ---
-app.use(bodyParser.json());
 
 // --- Ensure output directory exists ---
 if (!fs.existsSync(GENERATED_FILES_DIR)) {
@@ -95,6 +101,101 @@ if (!fs.existsSync(GENERATED_FILES_DIR)) {
   }
 }
 // --- End Directory Setup ---
+
+// --- NEW Endpoint: List Generated Repo Files ---
+app.get('/list-generated-files', async (req: Request, res: Response, next: NextFunction) => {
+    console.log(`Request received for /list-generated-files`);
+    try {
+        const files = await fs.promises.readdir(GENERATED_FILES_DIR);
+        const repoFiles = files
+            .map(filename => {
+                // Match pattern and capture user/org and repo parts
+                const match = filename.match(/^full_description_(.+?)_(.+)\.md$/);
+                if (match && match[1] && match[2]) {
+                    // Reconstruct identifier - assumes underscores in user/repo were replaced by single underscore
+                    // This might need adjustment if repo names have underscores originally
+                    const repoIdentifier = `${match[1]}/${match[2]}`;
+                    return { filename, repoIdentifier };
+                }
+                return null; // Exclude files that don't match
+            })
+            .filter(item => item !== null); // Remove null entries
+
+        console.log(`Found ${repoFiles.length} matching files.`);
+        res.status(200).json({ success: true, data: repoFiles });
+
+    } catch (error: any) {
+        console.error("Error listing generated files:", error);
+        if (error.code === 'ENOENT') {
+            // Directory doesn't exist, return empty list gracefully
+            console.log("Generated files directory not found, returning empty list.");
+            res.status(200).json({ success: true, data: [] });
+        } else {
+            next(error); // Pass other errors to error handler
+        }
+    }
+});
+// --- End List Endpoint ---
+
+// Define the async handler function separately
+const handleGetFileContent = async ( // <-- Add async here
+    req: Request<{ filename: string }>, // <-- Type route parameter
+    res: Response,
+    next: NextFunction
+): Promise<void> => { // <-- Explicit Promise<void> return
+    const requestedFilename = req.params.filename;
+    console.log(`Request received for /get-file-content/${requestedFilename}`);
+
+    // ** Stronger Security Validation **
+    const safeFilenameRegex = /^[a-zA-Z0-9_.-]+\.md$/;
+    const resolvedPath = path.join(GENERATED_FILES_DIR, requestedFilename);
+    const normalizedPath = path.normalize(resolvedPath);
+
+    // 1. Check basic format
+    if (!requestedFilename || !safeFilenameRegex.test(requestedFilename)) {
+        console.warn(`Attempt to get content for invalid filename format: ${requestedFilename}`);
+        res.status(400).json({ success: false, error: 'Invalid filename format.' });
+        return; // Explicit void return
+    }
+
+    // 2. Prevent path traversal
+    if (!normalizedPath.startsWith(GENERATED_FILES_DIR)) {
+        console.error(`Path traversal attempt detected: ${requestedFilename} resolved to ${normalizedPath}`);
+        res.status(400).json({ success: false, error: 'Invalid filename.' });
+        return; // Explicit void return
+    }
+
+    try {
+        // 3. Check if file exists and is accessible
+        await fs.promises.access(normalizedPath, fsConstants.R_OK);
+
+        // 4. Read file content
+        const content = await fs.promises.readFile(normalizedPath, 'utf-8');
+        console.log(`Successfully read content for ${requestedFilename}. Length: ${content.length}`);
+        res.status(200).json({ success: true, content: content });
+        // Implicit void return after sending response
+
+    } catch (error: any) {
+        if (error.code === 'ENOENT') {
+            console.log(`Content request for non-existent file: ${normalizedPath}`);
+            res.status(404).json({ success: false, error: 'File not found.' });
+            // No explicit return needed before next()
+        } else if (error.code === 'EACCES') {
+             console.error(`Permission denied reading file: ${normalizedPath}`);
+             res.status(500).json({ success: false, error: 'Could not read file (permission issue).' });
+             // No explicit return needed before next()
+        }
+        else {
+            console.error(`Error getting file content for ${requestedFilename}:`, error);
+            next(error); // Pass other errors to error handler
+        }
+        // Let execution fall through to implicitly return void after handling error or calling next()
+    }
+};
+
+// Use the handler constant with app.get
+app.get('/get-file-content/:filename', handleGetFileContent);
+// --- End Get Content Endpoint ---
 
 // --- Request Body Interface ---
 interface RunRepomixRequestBody {
@@ -136,7 +237,7 @@ const handleRunRepomix = (
     if (excludePatterns) command += ` --ignore "${excludePatterns}"`;
 
     console.log(`Executing Repomix via npx: ${command}`); // Updated log message
-    
+
     // Delete existing file logic...
     if (fs.existsSync(fullDynamicOutputPath)) {
         try {

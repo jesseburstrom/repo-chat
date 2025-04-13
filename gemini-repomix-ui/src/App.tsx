@@ -1,8 +1,9 @@
 // gemini-repomix-ui/src/App.tsx
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ChatInterface from './ChatInterface';
 import InputArea from './InputArea';
 import RepomixForm from './RepomixForm'; // <-- Use the form again
+import RepoSelector, { RepoInfo } from './RepoSelector'; 
 import './App.css';
 
 // Define ChatMessage type locally now or in a types file
@@ -14,7 +15,6 @@ var prefix = '';
 prefix = '/repochat';
 
 const MAX_HISTORY_TURNS = 5;
-// const REPOMIX_SERVER_URL = 'http://localhost:8003'; // <-- URL of the new server
 
 function App() {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -29,12 +29,86 @@ function App() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   // --- End Repomix State ---
 
-  const clearAttachedFile = useCallback(() => {
-    setAttachedFileContent(null);
-    setAttachedFileName(null);
-    console.log("Attached file cleared.");
-  }, []);
+   // --- Repo Selector State ---
+   const [availableRepos, setAvailableRepos] = useState<RepoInfo[]>([]);
+   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
+   const [repoListError, setRepoListError] = useState<string | null>(null);
+   const [selectedRepoFile, setSelectedRepoFile] = useState<string>(""); // Control dropdown value
+   const [isLoadingFileContent, setIsLoadingFileContent] = useState(false);
+   // --- End Repo Selector State ---
 
+   // --- Fetch Available Repos on Mount ---
+  const fetchAvailableRepos = useCallback(async () => {
+    setIsLoadingRepos(true);
+    setRepoListError(null);
+    console.log("Fetching available repo files...");
+    try {
+        const response = await fetch(`${prefix}/api/list-generated-files`); // Use Nginx path
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || `HTTP error ${response.status}`);
+        }
+        console.log("Available repos fetched:", result.data);
+        setAvailableRepos(result.data || []);
+    } catch (err: any) {
+        console.error("Failed to fetch repo list:", err);
+        setRepoListError(err.message || "Could not load repo list.");
+        setAvailableRepos([]); // Clear list on error
+    } finally {
+        setIsLoadingRepos(false);
+    }
+}, []);
+
+useEffect(() => {
+    fetchAvailableRepos(); // Fetch on initial load
+}, [fetchAvailableRepos]);
+// --- End Fetch Repos ---
+
+const clearAttachedFile = useCallback(() => {
+  setAttachedFileContent(null);
+  setAttachedFileName(null);
+  console.log("Attached file cleared.");
+}, []);
+
+
+// --- Load Content for Selected Repo ---
+const loadRepoFileContent = useCallback(async (filename: string) => {
+    if (!filename) { // Handle "-- Select --" option
+        clearAttachedFile();
+        setSelectedRepoFile("");
+        return;
+    }
+    setIsLoadingFileContent(true);
+    setError(null); // Clear chat errors
+    setRepoListError(null); // Clear repo errors
+    clearAttachedFile(); // Clear any manually attached file first
+    setSelectedRepoFile(filename); // Update dropdown state
+    console.log(`Loading content for: ${filename}`);
+
+    try {
+        const response = await fetch(`${prefix}/api/get-file-content/${encodeURIComponent(filename)}`); // Use Nginx path
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || `HTTP error ${response.status}`);
+        }
+
+        console.log(`Content loaded for ${filename}, length: ${result.content?.length}`);
+        setAttachedFileContent(result.content);
+        setAttachedFileName(filename); // Set filename for context
+
+    } catch (err: any) {
+        console.error(`Failed to load content for ${filename}:`, err);
+        setError(`Failed to load content for ${filename}: ${err.message}`); // Show error in chat area
+        clearAttachedFile(); // Clear on error
+        setSelectedRepoFile(""); // Reset dropdown if load fails
+    } finally {
+        setIsLoadingFileContent(false);
+    }
+}, [clearAttachedFile]); // Add dependency
+// --- End Load Content ---
+
+  
   const handleFileAttach = useCallback((file: File) => {
       setIsLoading(true); // Use the chat loading indicator briefly
       setError(null);
@@ -58,53 +132,39 @@ function App() {
       reader.readAsText(file);
   }, []);
 
-
-  // --- Function to call Repomix backend ---
+  // Keep handleGenerateDescription - make sure it calls fetchAvailableRepos on success
   const handleGenerateDescription = useCallback(async (
-        repoUrl: string,
-        includePatterns: string,
-        excludePatterns: string
-    ) => {
-        setIsGenerating(true);
-        setGenerationMessage(null);
-        setGenerationError(null);
-        // Clear any manually attached file when generating a new one
-        clearAttachedFile();
+    repoUrl: string, includePatterns: string, excludePatterns: string
+): Promise<{ success: boolean; outputFilename?: string; error?: string }> => {
+    setIsGenerating(true);
+    setGenerationMessage(null);
+    clearAttachedFile();
+    console.log(`Sending request to Nginx for Repomix...`);
+    try {
+        const response = await fetch(`${prefix}/api/run-repomix`, { // Correct path Nginx listens on
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+              repoUrl,
+              includePatterns: includePatterns || undefined, // Send undefined if empty
+              excludePatterns: excludePatterns || undefined, // Send undefined if empty
+          }),
+      });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || `HTTP error ${response.status}`);
+        console.log("Repomix Success:", result);
+        fetchAvailableRepos(); // <-- Refresh the list after generating!
+        return { success: true, outputFilename: result.outputFilename };
+    } catch (err: any) {
+        console.error("Repomix generation fetch failed:", err);
+        return { success: false, error: err.message || "Failed to connect to Repomix service." };
+    }
+  
+}, [clearAttachedFile, fetchAvailableRepos]); // Add fetchAvailableRepos dependency
 
-        //console.log(`Sending request to Repomix server: /repochat/api/run-repomix`);
-        
-        try {
-            // *** USE RELATIVE NGINX PATH ***
-            const response = await fetch(`${prefix}/api/run-repomix`, { // Correct path Nginx listens on
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    repoUrl,
-                    includePatterns: includePatterns || undefined, // Send undefined if empty
-                    excludePatterns: excludePatterns || undefined, // Send undefined if empty
-                }),
-            });
-
-            const result = await response.json();
-
-            if (!response.ok || !result.success) {
-                console.error("Repomix server error response:", result);
-                throw new Error(result.error || `HTTP error ${response.status}`);
-            }
-
-            setGenerationMessage(result.message + ` (Filename: ${result.outputFilename})`); // Display success message
-
-        } catch (err: any) {
-            console.error("Repomix generation failed:", err);
-            setGenerationError(err.message || "Failed to run Repomix on server.");
-        } finally {
-            setIsGenerating(false);
-        }
-    }, [clearAttachedFile]); // Add dependency
-
-
+  
   const handlePromptSubmit = useCallback(async (prompt: string) => {
     if (!prompt && !attachedFileContent) {
       setError("Please type a prompt or attach the generated description file.");
@@ -189,6 +249,16 @@ function App() {
       />
       {/* --- End Repomix Form --- */}
 
+      {/* Render Repo Selector */}
+      <RepoSelector
+         repos={availableRepos}
+         onSelectRepo={loadRepoFileContent}
+         isLoading={isLoadingRepos || isLoadingFileContent} // Loading if fetching list OR content
+         //disabled={isLoadingRepos || isGenerating} // Disable if chat/generation busy
+         selectedValue={selectedRepoFile}
+      />
+      {repoListError && <div className="error-message repo-error">Failed to load repo list: {repoListError}</div>}
+
       <div className="chat-scroll-area">
         <ChatInterface history={chatHistory} />
         {isLoading && chatHistory.length > 0 && chatHistory[chatHistory.length-1].role === 'user' && <div className="loading-indicator">Thinking...</div>}
@@ -211,145 +281,3 @@ function App() {
 
 export default App;
 
-// // src/App.tsx
-// import React, { useState, useEffect, useCallback } from 'react';
-// import ChatInterface from './ChatInterface';
-// import InputArea from './InputArea';
-// import { callGeminiApi, ChatMessage } from './api';
-// import { Content } from "@google/generai"; // Import Content type
-// import './App.css';
-
-// const MAX_HISTORY_TURNS = 5; // Keep last 5 User/Model pairs
-
-// function App() {
-//   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-//   const [isLoading, setIsLoading] = useState(false);
-//   const [error, setError] = useState<string | null>(null);
-//   const [attachedFileContent, setAttachedFileContent] = useState<string | null>(null);
-//   const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
-
-//   // Add a function to clear the attached file
-//   const clearAttachedFile = useCallback(() => {
-//     setAttachedFileContent(null);
-//     setAttachedFileName(null);
-//     console.log("Attached file cleared.");
-//     // Optionally reset the file input if you have a ref to it and want to clear its visual state
-//     // if (fileInputRef.current) { fileInputRef.current.value = ''; }
-//   }, []);
-
-
-//   const handleFileAttach = useCallback((file: File) => {
-//     setIsLoading(true);
-//     setError(null);
-//     const reader = new FileReader();
-//     reader.onload = (event) => {
-//       const content = event.target?.result as string;
-//       setAttachedFileContent(content);
-//       setAttachedFileName(file.name);
-//       setIsLoading(false);
-//       console.log(`Attached file ${file.name} (${(content?.length ?? 0)} chars)`);
-//     };
-//     reader.onerror = (err) => {
-//       console.error("File reading error:", err);
-//       setError(`Error reading file: ${err}`);
-//       setAttachedFileContent(null);
-//       setAttachedFileName(null);
-//       setIsLoading(false);
-//     };
-//     reader.readAsText(file);
-//   }, []);
-
-//   const handlePromptSubmit = useCallback(async (prompt: string) => {
-//     if (!prompt && !attachedFileContent) { // Need either a prompt or a file to proceed
-//         setError("Please type a prompt or attach a file.");
-//         return;
-//     }
-
-//     setIsLoading(true);
-//     setError(null);
-
-//     // IMPORTANT: Create the message text *before* adding to local history
-//     // This ensures the API gets the combined content, but UI shows only user prompt
-//     let messageToSendToApi = "";
-
-//     if (attachedFileContent) {
-//       // Clearly delineate the attached file content for the model
-//       messageToSendToApi += `Attached File Content (${attachedFileName || 'context.txt'}):\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
-//     }
-//     // Add the user's typed prompt after the file content
-//      if (prompt) {
-//         messageToSendToApi += `User Prompt: ${prompt}`;
-//      } else {
-//          // If no prompt but file is attached, give a default instruction
-//          messageToSendToApi += `User Prompt: Please analyze the attached file content.`;
-//      }
-
-
-//     // Add ONLY the user's typed prompt (or a placeholder if none) to the visual chat history
-//      const userDisplayPrompt = prompt || `(Analyzing attached file: ${attachedFileName})`;
-//     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userDisplayPrompt }] };
-//     const currentHistory = [...chatHistory, newUserMessage];
-//     setChatHistory(currentHistory); // Show user message immediately
-
-//     // Prepare history for Gemini API (needs Content[] format)
-//     // Exclude the message we just added visually
-//     const historyForApi: Content[] = chatHistory
-//       .slice(-MAX_HISTORY_TURNS * 2) // Limit history turns sent
-//       .map(msg => ({
-//         role: msg.role,
-//         parts: msg.parts,
-//       }));
-
-//     console.log("History being sent to API:", historyForApi);
-//     console.log("Message being sent to API:", messageToSendToApi);
-
-
-//     try {
-//       // Send the history (previous turns) and the NEW combined message
-//       const responseText = await callGeminiApi(historyForApi, messageToSendToApi);
-//       const newModelMessage: ChatMessage = { role: 'model', parts: [{ text: responseText }] };
-//       setChatHistory(prev => [...prev, newModelMessage]); // Add model response
-
-//       // --- Clear the file after successful use ---
-//       // Decide if you want to clear the file after each prompt.
-//       // If you want it to persist, comment out the next line.
-//        clearAttachedFile();
-//       // ---
-//     } catch (apiError: any) {
-//       setError(`API Error: ${apiError.message}`);
-//       // Rollback the optimistic UI update for the user message
-//       setChatHistory(prev => prev.slice(0, -1));
-//     } finally {
-//       setIsLoading(false);
-//     }
-//   }, [chatHistory, attachedFileContent, attachedFileName, clearAttachedFile]); // Add clearAttachedFile dependency
-
-//   return (
-//     <div className="app-container">
-//       <header className="app-header">
-//         <h1>Gemini Repomix Assistant</h1>
-//       </header>
-
-//       <div className="chat-scroll-area">
-//         <ChatInterface history={chatHistory} />
-//         {isLoading && chatHistory.length > 0 && chatHistory[chatHistory.length-1].role === 'user' && <div className="loading-indicator">Thinking...</div>} {/* Show loading after user msg */}
-//         {error && <div className="error-message">Error: {error}</div>}
-//       </div>
-
-//       <InputArea
-//         onPromptSubmit={handlePromptSubmit}
-//         onFileAttach={handleFileAttach}
-//         isLoading={isLoading}
-//         attachedFileName={attachedFileName}
-//         // Pass the clear function to InputArea if you add a remove button there
-//         // onFileRemove={clearAttachedFile}
-//       />
-
-//       <footer className="app-footer">
-//          {/* Maybe add token count here later */}
-//       </footer>
-//     </div>
-//   );
-// }
-
-// export default App;
