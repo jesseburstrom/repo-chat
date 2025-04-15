@@ -1,21 +1,20 @@
 /* src/App.css */
-html, body {
+html, body, #root {
+  height: 100%;
   margin: 0;
   padding: 0;
-  height: 100%;
-  background-color: #f0f2f5; /* Light gray background for the whole page */
-  font-family: 'Roboto', 'Helvetica Neue', sans-serif; /* Or your preferred font */
+  font-family: sans-serif;
+  box-sizing: border-box; /* Include padding and border in element's total width and height */
 }
-
-#root { /* Target the root element Vite mounts to */
-    height: 100%;
+*, *:before, *:after {
+  box-sizing: inherit;
 }
 
 .app-container {
   display: flex;
   flex-direction: column;
   height: 100vh; /* Full viewport height */
-  width: 75%;   /* Occupy 85% of the viewport width */
+  width: 75%;   /* Occupy 75% of the viewport width */
   margin: 0 auto; /* Center the container horizontally */
   background-color: #ffffff; /* White background for the chat area */
   box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); /* Subtle shadow */
@@ -35,27 +34,52 @@ html, body {
    color: #333;
 }
 
-.chat-scroll-area {
-  flex-grow: 1; /* Takes up remaining space */
-  overflow-y: auto; /* Allows scrolling */
-  padding: 25px; /* Increase padding inside scroll area */
-  display: flex;
-  flex-direction: column;
-  background-color: #ffffff;
+/* --- Scrollable Area --- */
+.scrollable-content-area {
+  flex-grow: 1; /* Allow this area to take up remaining vertical space */
+  overflow-y: auto; /* Enable vertical scrolling ONLY when needed */
+  padding: 1rem 1.5rem; /* Add padding around the content */
+  display: flex; /* Use flexbox for children stacking */
+  flex-direction: column; /* Stack children vertically */
+  gap: 1rem; /* Add space between direct children (Form, Selector, Chat) */
+}
+/* Add some padding at the bottom of the scrollable area
+   so content doesn't sit directly under the input box shadow/border */
+.scrollable-content-area::after {
+    content: '';
+    display: block;
+    height: 1rem; /* Adjust space as needed */
 }
 
- .loading-indicator, .error-message {
-    text-align: center;
-    padding: 15px; /* More padding */
-    color: #666;
-    font-style: italic;
- }
 
- .error-message {
-    color: #d93025; /* Red for errors */
-    font-weight: bold;
- }
+ /* Error and Loading messages within scrollable area */
+.loading-indicator,
+.error-message {
+  padding: 0.75rem 1rem;
+  margin-top: 0.5rem; /* Add some space above */
+  margin-bottom: 0.5rem; /* Add some space below */
+  border-radius: 4px;
+  text-align: center;
+  flex-shrink: 0; /* Prevent shrinking */
+}
+.loading-indicator {
+  color: #495057;
+}
 
+.error-message {
+  color: #721c24;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+}
+/* --- Input Area (Fixed Below Scroll) --- */
+.input-area-container {
+  flex-shrink: 0; /* Prevent input area from shrinking */
+  background-color: #ffffff; /* White background usually */
+  padding: 0.75rem 1.5rem; /* Adjust padding */
+  border-top: 1px solid #dee2e6; /* Separator line */
+  box-shadow: 0 -2px 5px rgba(0,0,0,0.05); /* Optional subtle shadow */
+  z-index: 5; /* Keep above scrolled content if needed */
+}
 
 .app-footer {
   padding: 8px 25px; /* Match chat area padding */

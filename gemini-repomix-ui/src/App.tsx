@@ -1,5 +1,5 @@
 // gemini-repomix-ui/src/App.tsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import ChatInterface from './ChatInterface';
 import InputArea from './InputArea';
 import RepomixForm from './RepomixForm'; // <-- Use the form again
@@ -12,7 +12,7 @@ export interface ChatMessage {
   parts: [{ text: string }];
 }
 var prefix = '';
-prefix = '/repochat';
+//prefix = '/repochat';
 
 const MAX_HISTORY_TURNS = 5;
 
@@ -37,6 +37,9 @@ function App() {
    const [isLoadingFileContent, setIsLoadingFileContent] = useState(false);
    // --- End Repo Selector State ---
 
+   // Ref for the scrollable div
+  const scrollableAreaRef = useRef<HTMLDivElement>(null);
+  
    // --- Fetch Available Repos on Mount ---
   const fetchAvailableRepos = useCallback(async () => {
     setIsLoadingRepos(true);
@@ -185,20 +188,18 @@ const loadRepoFileContent = useCallback(async (filename: string) => {
 
     const userDisplayPrompt = prompt || `(Using attached file: ${attachedFileName})`;
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userDisplayPrompt }] };
-    const currentHistory = [...chatHistory, newUserMessage];
-    setChatHistory(currentHistory); // Optimistic UI update
+    // const currentHistory = [...chatHistory, newUserMessage];
+    // setChatHistory(currentHistory); // Optimistic UI update
 
 
-      // Prepare history for the BACKEND proxy endpoint
-      // Use the local ChatMessage format, the backend can handle it
-      const historyForBackend: ChatMessage[] = chatHistory
-        .slice(-MAX_HISTORY_TURNS * 2)
-        .map(msg => ({ // Ensure it matches ChatMessage structure if needed
-          role: msg.role,
-          parts: msg.parts,
-        }));
+    const historyForBackend: ChatMessage[] = chatHistory
+    .slice(-MAX_HISTORY_TURNS * 2)
+    .map(msg => ({ role: msg.role, parts: msg.parts }));
 
-      console.log("Sending request to Backend Gemini Proxy");
+  // Update chat history state AND scroll down (after the state update)
+  setChatHistory(prev => [...prev, newUserMessage]);
+
+  console.log("Sending request to Backend Gemini Proxy");
       
       try {
           // *** CALL YOUR BACKEND PROXY ENDPOINT ***
@@ -233,6 +234,14 @@ const loadRepoFileContent = useCallback(async (filename: string) => {
       }
   }, [chatHistory, attachedFileContent, attachedFileName, clearAttachedFile]);
 
+  // --- Effect to scroll down ---
+  useEffect(() => {
+    if (scrollableAreaRef.current) {
+      // Scroll down when chatHistory changes OR when isLoading becomes true (after user sends message)
+      scrollableAreaRef.current.scrollTop = scrollableAreaRef.current.scrollHeight;
+    }
+    // Trigger scroll also when loading indicator appears for user message
+  }, [chatHistory, isLoading]);
 
   return (
     <div className="app-container">
@@ -240,44 +249,101 @@ const loadRepoFileContent = useCallback(async (filename: string) => {
         <h1>Gemini Repomix Assistant</h1>
       </header>
 
-      {/* --- Render Repomix Form --- */}
-      <RepomixForm
-        onGenerate={handleGenerateDescription}
-        isGenerating={isGenerating}
-        generationMessage={generationMessage}
-        generationError={generationError}
-      />
-      {/* --- End Repomix Form --- */}
+      {/* This div contains everything that scrolls */}
+      <div className="scrollable-content-area" ref={scrollableAreaRef}> {/* <-- SCROLL container */}
 
-      {/* Render Repo Selector */}
-      <RepoSelector
-         repos={availableRepos}
-         onSelectRepo={loadRepoFileContent}
-         isLoading={isLoadingRepos || isLoadingFileContent} // Loading if fetching list OR content
-         //disabled={isLoadingRepos || isGenerating} // Disable if chat/generation busy
-         selectedValue={selectedRepoFile}
-      />
-      {repoListError && <div className="error-message repo-error">Failed to load repo list: {repoListError}</div>}
+        {/* Repomix Form inside scroll area */}
+        <RepomixForm
+          onGenerate={handleGenerateDescription}
+          isGenerating={isGenerating}
+          generationMessage={generationMessage}
+          generationError={generationError}
+        />
 
-      <div className="chat-scroll-area">
+        {/* Repo Selector inside scroll area */}
+        <RepoSelector
+           repos={availableRepos}
+           onSelectRepo={loadRepoFileContent}
+           isLoading={isLoadingRepos || isLoadingFileContent}
+           selectedValue={selectedRepoFile}
+           // disabled={isLoading || isGenerating} // Keep disabling based on chat/gen state
+        />
+        {/* Repo list error inside scroll area */}
+        {repoListError && <div className="error-message repo-error">Failed to load repo list: {repoListError}</div>}
+
+        {/* Chat Interface inside scroll area */}
         <ChatInterface history={chatHistory} />
-        {isLoading && chatHistory.length > 0 && chatHistory[chatHistory.length-1].role === 'user' && <div className="loading-indicator">Thinking...</div>}
-        {error && <div className="error-message">Error: {error}</div>}
-      </div>
 
+        {/* Loading/Error indicators related to chat inside scroll area */}
+        {/* Show thinking indicator only when waiting for model response */}
+        {isLoading && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'user' && (
+           <div className="loading-indicator">Thinking...</div>
+        )}
+        {/* Show chat error inside scroll area */}
+        {error && <div className="error-message chat-error">Error: {error}</div>}
+
+      </div> {/* <-- END of scrollable-content-area */}
+
+      {/* Input Area is OUTSIDE the scrollable div, but inside the main flex container */}
       <InputArea
         onPromptSubmit={handlePromptSubmit}
         onFileAttach={handleFileAttach}
-        isLoading={isLoading}
+        // Disable input if EITHER chat response is loading OR repomix is generating
+        isLoading={isLoading || isGenerating}
         attachedFileName={attachedFileName}
       />
 
       <footer className="app-footer">
-        {/* ... */}
+        {/* Footer content remains outside scroll area */}
       </footer>
     </div>
   );
 }
+
+  // return (
+  //   <div className="app-container">
+  //     <header className="app-header">
+  //       <h1>Gemini Repomix Assistant</h1>
+  //     </header>
+
+  //     {/* --- Render Repomix Form --- */}
+  //     <RepomixForm
+  //       onGenerate={handleGenerateDescription}
+  //       isGenerating={isGenerating}
+  //       generationMessage={generationMessage}
+  //       generationError={generationError}
+  //     />
+  //     {/* --- End Repomix Form --- */}
+
+  //     {/* Render Repo Selector */}
+  //     <RepoSelector
+  //        repos={availableRepos}
+  //        onSelectRepo={loadRepoFileContent}
+  //        isLoading={isLoadingRepos || isLoadingFileContent} // Loading if fetching list OR content
+  //        //disabled={isLoadingRepos || isGenerating} // Disable if chat/generation busy
+  //        selectedValue={selectedRepoFile}
+  //     />
+  //     {repoListError && <div className="error-message repo-error">Failed to load repo list: {repoListError}</div>}
+
+  //     <div className="chat-scroll-area">
+  //       <ChatInterface history={chatHistory} />
+  //       {isLoading && chatHistory.length > 0 && chatHistory[chatHistory.length-1].role === 'user' && <div className="loading-indicator">Thinking...</div>}
+  //       {error && <div className="error-message">Error: {error}</div>}
+  //     </div>
+
+  //     <InputArea
+  //       onPromptSubmit={handlePromptSubmit}
+  //       onFileAttach={handleFileAttach}
+  //       isLoading={isLoading}
+  //       attachedFileName={attachedFileName}
+  //     />
+
+  //     <footer className="app-footer">
+  //       {/* ... */}
+  //     </footer>
+  //   </div>
+  // );
+//}
 
 export default App;
 
