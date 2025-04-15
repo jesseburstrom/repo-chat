@@ -9,6 +9,7 @@
     display: flex;
     align-items: flex-end; /* Align items to bottom for textarea expansion */
     gap: 10px;
+    width: 100%,
     border: 1px solid #dadce0;
     border-radius: 24px; /* Rounded corners */
     padding: 8px 15px;
@@ -35,23 +36,23 @@
       cursor: not-allowed;
    }
   
-  .prompt-input {
-    flex-grow: 1;
-    border: none;
-    outline: none;
-    resize: none; /* Prevent manual resize */
-    font-family: inherit;
+   .prompt-input {
+    flex-grow: 1; /* Allow textarea to take up remaining space */
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    padding: 0.5rem 0.75rem;
     font-size: 1rem;
-    background-color: transparent; /* Inherit background */
-    padding: 8px 0; /* Adjust padding */
     line-height: 1.5;
-     max-height: 150px; /* Limit max height */
-     overflow-y: auto; /* Add scroll if it exceeds max height */
-     min-height: 24px; /* Ensure it doesn't collapse too small */
+    min-height: calc(1.5em + 1rem + 2px); /* Minimum height to match buttons */
+    resize: vertical; /* Allow vertical resize by user */
+    max-height: 150px; /* Optional: Limit max height */
+    overflow-y: auto; /* Add scroll if content exceeds max-height or initial size */
+    /* Ensure box-sizing is correct if not set globally */
+    box-sizing: border-box;
   }
-  
   .prompt-input:disabled {
-      background-color: #eee; /* Indicate disabled state */
+      background-color: #e9ecef; /* Indicate disabled state */
+      opacity: 1; /* Override potential browser dimming */
   }
   
   .submit-button {
