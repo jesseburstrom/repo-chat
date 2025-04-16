@@ -40,7 +40,7 @@ function App() {
    const [selectedRepoFile, setSelectedRepoFile] = useState<string>(""); // Control dropdown value
    const [isLoadingFileContent, setIsLoadingFileContent] = useState(false);
    const [attachmentStatus, setAttachmentStatus] = useState<string | null>(null); // NEW: Status for attaching
-   const attachmentStatusTimer = useRef<NodeJS.Timeout | null>(null); // Timer for clearing status
+   const attachmentStatusTimer = useRef<number | null>(null); // Timer for clearing status
    // --- End Repo Selector State ---
 
    // Ref for the scrollable div
@@ -338,6 +338,13 @@ const loadRepoFileContent = useCallback(async (filename: string) => {
            selectedValue={selectedRepoFile}
            // disabled={isLoading || isGenerating} // Keep disabling based on chat/gen state
         />
+        {/* --- Display Attachment Status --- */}
+        {attachmentStatus && (
+          <div className={`attachment-status ${attachmentStatus.includes('Failed') ? 'error' : 'success'}`}>
+              {attachmentStatus}
+          </div>
+        )}
+      {/* --- End Display Attachment Status --- */}
         {/* Repo list error inside scroll area */}
         {repoListError && <div className="error-message repo-error">Failed to load repo list: {repoListError}</div>}
 
@@ -369,51 +376,6 @@ const loadRepoFileContent = useCallback(async (filename: string) => {
     </div>
   );
 }
-
-  // return (
-  //   <div className="app-container">
-  //     <header className="app-header">
-  //       <h1>Gemini Repomix Assistant</h1>
-  //     </header>
-
-  //     {/* --- Render Repomix Form --- */}
-  //     <RepomixForm
-  //       onGenerate={handleGenerateDescription}
-  //       isGenerating={isGenerating}
-  //       generationMessage={generationMessage}
-  //       generationError={generationError}
-  //     />
-  //     {/* --- End Repomix Form --- */}
-
-  //     {/* Render Repo Selector */}
-  //     <RepoSelector
-  //        repos={availableRepos}
-  //        onSelectRepo={loadRepoFileContent}
-  //        isLoading={isLoadingRepos || isLoadingFileContent} // Loading if fetching list OR content
-  //        //disabled={isLoadingRepos || isGenerating} // Disable if chat/generation busy
-  //        selectedValue={selectedRepoFile}
-  //     />
-  //     {repoListError && <div className="error-message repo-error">Failed to load repo list: {repoListError}</div>}
-
-  //     <div className="chat-scroll-area">
-  //       <ChatInterface history={chatHistory} />
-  //       {isLoading && chatHistory.length > 0 && chatHistory[chatHistory.length-1].role === 'user' && <div className="loading-indicator">Thinking...</div>}
-  //       {error && <div className="error-message">Error: {error}</div>}
-  //     </div>
-
-  //     <InputArea
-  //       onPromptSubmit={handlePromptSubmit}
-  //       onFileAttach={handleFileAttach}
-  //       isLoading={isLoading}
-  //       attachedFileName={attachedFileName}
-  //     />
-
-  //     <footer className="app-footer">
-  //       {/* ... */}
-  //     </footer>
-  //   </div>
-  // );
-//}
 
 export default App;
 

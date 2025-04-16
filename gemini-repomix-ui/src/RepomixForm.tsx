@@ -41,7 +41,7 @@ const RepomixForm: React.FC<RepomixFormProps> = ({
                         type="url"
                         id="repoUrl"
                         value={repoUrl}
-                        onChange={(e) => setRepoUrl(e.target.value)}
+                        onChange={(e) => onRepoUrlChange(e.target.value)}
                         placeholder="https://github.com/user/repo.git"
                         required
                         disabled={isGenerating}
