@@ -16,7 +16,7 @@
   .submit-button {
     padding: 10px 15px;
     margin: 0 5px;
-    border: none;
+    border: 1px solid #ced4da; /* Light grey border */
     border-radius: 4px;
     cursor: pointer;
     background-color: #4CAF50; /* Example color */
@@ -27,10 +27,17 @@
   }
   
   .attach-button {
-    background-color: #6c757d; /* Grey color for attach */
-    font-size: 1.2em; /* Make icon slightly larger */
-    padding: 8px 12px; /* Adjust padding for icon */
-    height: 40px;
+    /* --- NEW Light Background --- */
+    background-color: #f8f9fa; /* Very light grey (Bootstrap light color) */
+    /* Optional: Change border color if needed */
+    /* border-color: #ced4da; */ /* Already set in shared style */
+    /* --- Ensure Icon is Visible --- */
+    /* color: #495057; */ /* Set a darker color for the icon if it were text/SVG. Emoji color is usually system-dependent */
+    font-size: 1.2em;
+    padding: 8px 12px; /* Keep specific padding */
+    height: 40px; /* Keep specific height */
+    /* Override color from shared style if it was white, otherwise remove this line */
+    color: initial; /* Reset color to default text color, better for emoji visibility */
   }
   
   
