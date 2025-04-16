@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import './RepomixForm.css'; // We'll create this CSS file
 
 interface RepomixFormProps {
+    repoUrl: string;
+    onRepoUrlChange: (value: string) => void;
     onGenerate: (repoUrl: string, includePatterns: string, excludePatterns: string) => void;
     isGenerating: boolean;
     generationMessage: string | null;
@@ -10,12 +12,14 @@ interface RepomixFormProps {
 }
 
 const RepomixForm: React.FC<RepomixFormProps> = ({
+    repoUrl,
+    onRepoUrlChange,
     onGenerate,
     isGenerating,
     generationMessage,
     generationError,
 }) => {
-    const [repoUrl, setRepoUrl] = useState('');
+    //const [repoUrl, setRepoUrl] = useState('');
     // Default values 
     const [includePatterns, setIncludePatterns] = useState('**/*.dart,**/*.ts,**/*.tsx,**/*.py,**/*.cs');
     const [excludePatterns, setExcludePatterns] = useState('*.log,tmp/'); // repomix uses --ignore
