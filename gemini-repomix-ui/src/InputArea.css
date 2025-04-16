@@ -7,52 +7,56 @@
   
   .input-form {
     display: flex;
-    align-items: flex-end; /* Align items to bottom for textarea expansion */
-    gap: 10px;
-    width: 100%,
-    border: 1px solid #dadce0;
-    border-radius: 24px; /* Rounded corners */
-    padding: 8px 15px;
-     background-color: #f8f9fa; /* Slightly different background for input area */
+    align-items: flex-end; /* Align items to the top */
+    width: 100%;
   }
   
   
-   .attach-button {
-      background: none;
-      border: none;
-      padding: 5px;
-      cursor: pointer;
-      font-size: 1.5em;
-      color: #5f6368;
-      align-self: center; /* Center vertically */
-   }
-  
-   .attach-button:hover {
-      color: #202124;
-   }
-  
-   .attach-button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-   }
-  
-   .prompt-input {
-    flex-grow: 1; /* Allow textarea to take up remaining space */
-    border: 1px solid #ced4da;
-    border-radius: 0.25rem;
-    padding: 0.5rem 0.75rem;
-    font-size: 1rem;
-    line-height: 1.5;
-    min-height: calc(1.5em + 1rem + 2px); /* Minimum height to match buttons */
-    resize: vertical; /* Allow vertical resize by user */
-    max-height: 150px; /* Optional: Limit max height */
-    overflow-y: auto; /* Add scroll if content exceeds max-height or initial size */
-    /* Ensure box-sizing is correct if not set globally */
-    box-sizing: border-box;
+  .attach-button,
+  .submit-button {
+    padding: 10px 15px;
+    margin: 0 5px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background-color: #4CAF50; /* Example color */
+    color: white;
+    height: 40px; /* Match initial approximate textarea height */
+    flex-shrink: 0; /* Prevent buttons from shrinking */
+    align-self: flex-end;
   }
+  
+  .attach-button {
+    background-color: #6c757d; /* Grey color for attach */
+    font-size: 1.2em; /* Make icon slightly larger */
+    padding: 8px 12px; /* Adjust padding for icon */
+    height: 40px;
+  }
+  
+  
+  .attach-button:disabled,
+  .submit-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+  
+  .prompt-input {
+    flex-grow: 1; /* Allow textarea to take available space */
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem; /* Base font size */
+    line-height: 1.5; /* Crucial for height calculation */
+    box-sizing: border-box; /* Include padding/border in element's total width/height */
+  
+    /* --- Dynamic Height --- */
+    resize: none; /* Disable manual resizing handle */
+    
+    transition: height 0.1s ease-out; /* Optional: smooth height transition */
+  }
+  
   .prompt-input:disabled {
-      background-color: #e9ecef; /* Indicate disabled state */
-      opacity: 1; /* Override potential browser dimming */
+    background-color: #f0f0f0;
   }
   
   .submit-button {
@@ -85,8 +89,15 @@
   }
   
   .attached-file-indicator {
-      font-size: 0.8em;
-      color: #5f6368;
-      margin-top: 5px;
-      padding-left: 5px;
+    font-size: 0.85em;
+    color: #555;
+    margin-top: 5px;
+    padding-left: 50px; /* Align roughly with textarea start */
+  }
+  
+  /* Optional: Add hover/focus states */
+  .prompt-input:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
   }
