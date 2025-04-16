@@ -88,14 +88,15 @@ const clearAttachedFile = useCallback(() => {
 }, []);
 
 
-// --- Load Content for Selected Repo ---
-const loadRepoFileContent = useCallback(async (filename: string) => {
-    if (!filename) { // Handle "-- Select --" option
-        clearAttachedFile();
-        setSelectedRepoFile("");
-        clearAttachmentStatus(); // Clear status if user deselects
-        return;
-    }
+// --- Load Content for Selected Repo (MODIFIED) ---
+// Make it async and return a boolean indicating success
+const loadRepoFileContent = useCallback(async (filename: string): Promise<boolean> => {
+  if (!filename) {
+      clearAttachedFile();
+      setSelectedRepoFile("");
+      clearAttachmentStatus();
+      return false; // Indicate failure (or neutral state) if no filename
+  }
     setIsLoadingFileContent(true);
     setError(null); // Clear chat errors
     setRepoListError(null); // Clear repo errors
@@ -127,6 +128,7 @@ const loadRepoFileContent = useCallback(async (filename: string) => {
         }
 
         console.log(`Content loaded for ${filename}, length: ${result.content?.length}`);
+        setGenerationMessage(`Content loaded for ${filename}, length: ${result.content?.length}`);
         setAttachedFileContent(result.content);
         setAttachedFileName(filename); // Set filename for context
         setAttachmentStatus(`Attached ${filename} successfully.`); // Show success message
@@ -134,6 +136,7 @@ const loadRepoFileContent = useCallback(async (filename: string) => {
         attachmentStatusTimer.current = setTimeout(() => {
             clearAttachmentStatus();
         }, 3000); // 3 seconds
+        return true;
 
     } catch (err: any) {
         console.error(`Failed to load content for ${filename}:`, err);
@@ -145,6 +148,7 @@ const loadRepoFileContent = useCallback(async (filename: string) => {
         attachmentStatusTimer.current = setTimeout(() => {
              clearAttachmentStatus();
         }, 5000); // 5 seconds
+        return false;
     } finally {
         setIsLoadingFileContent(false);
     }
@@ -206,10 +210,11 @@ const loadRepoFileContent = useCallback(async (filename: string) => {
         console.log("Repomix Success:", result);
         const outputFilename = result.outputFilename;
         // --- Success Handling ---
-        setGenerationMessage(`Success! Generated: ${outputFilename}. Loading content...`); // Show success message
-        await fetchAvailableRepos(); // <-- Refresh the list after generating!
+        
         // --- Auto-load the generated file ---
         if (outputFilename) {
+          setGenerationMessage(`Success! Generated: ${outputFilename}. Loading content...`); // Show success message
+          await fetchAvailableRepos(); // <-- Refresh the list after generating!
           // Need a slight delay or ensure state updates settle before loading
           // Using setTimeout 0 can help push it to the next event loop tick
           setTimeout(() => {
@@ -218,6 +223,11 @@ const loadRepoFileContent = useCallback(async (filename: string) => {
               // and the file content load function finishes
               setSelectedRepoFile(outputFilename);
           }, 0);
+      } else {
+        // Load failed, loadRepoFileContent has set error/status messages.
+        // Update the message in the generation area too.
+        setGenerationError(`Failed to load content for ${outputFilename}. See status below dropdown.`);
+        setGenerationMessage(null); // Clear the "Loading..." message
       }
       // Keep the repoUrl in the input field (already handled by state)
       // --- End Auto-load ---
@@ -230,7 +240,7 @@ const loadRepoFileContent = useCallback(async (filename: string) => {
       setIsGenerating(false); // <--- Ensure this always runs
   }
   
-}, [clearAttachedFile, fetchAvailableRepos, loadRepoFileContent]); // Add fetchAvailableRepos dependency
+}, [clearAttachedFile, fetchAvailableRepos, loadRepoFileContent, clearAttachmentStatus]);
 
   
   const handlePromptSubmit = useCallback(async (prompt: string) => {
@@ -248,6 +258,7 @@ const loadRepoFileContent = useCallback(async (filename: string) => {
     if (attachedFileContent) {
         combinedPrompt += `Attached File Content (${attachedFileName || 'full_description.md'}):\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
     }
+    
     if (prompt) {
         combinedPrompt += `User Prompt: ${prompt}`;
     } else {
