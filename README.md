@@ -1,6 +1,5 @@
 Okay, here is a professional README.md draft for your "Gemini Repomix Assistant" project, based on the provided code structure and functionality. It includes setup instructions, usage guide, feature list, and Mermaid diagrams for architecture visualization.
 
-```markdown
 # Gemini Repomix Assistant
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) <!-- Add other relevant badges: build status, coverage, etc. -->
@@ -46,7 +45,7 @@ A web application that leverages Google's Gemini Pro API and the `repomix` tool 
 *   **Clear Backend/Frontend Separation:** Node.js/Express backend handles API calls and `repomix` execution, while the React frontend manages the user interface.
 *   **Auto-Resizing Input:** Chat input area expands automatically for multi-line messages.
 
----
+
 
 ## Architecture
 
