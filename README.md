@@ -234,13 +234,6 @@ Contributions are welcome! Please feel free to submit pull requests or open issu
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. (You should create a LICENSE file with the MIT license text).
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 ```
 
-**Next Steps:**
-
-1.  **Create a `LICENSE` file:** Copy the standard MIT License text into a file named `LICENSE` in the root of your project.
-2.  **Update Badges:** Add relevant badges for build status (if you set up CI/CD), code coverage, etc.
-3.  **Refine `package.json` scripts:** Ensure the `npm run start` (or `dev`) commands mentioned in the README match the actual scripts in your `backend/package.json` and `gemini-repomix-ui/package.json`.
-4.  **Review and Customize:** Read through the generated README and customize any sections as needed (e.g., add more specific prerequisites, contribution guidelines, or acknowledgements).
-5.  **Add Screenshots/GIF:** Consider adding a screenshot or GIF of the application in action to make the README even more engaging.
