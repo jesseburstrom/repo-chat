@@ -69,6 +69,21 @@ graph TD
     style FileSystem fill:#fff3cd,stroke:#856404
     style GeminiAPI fill:#d4edda,stroke:#155724
 ```
+### Repomix Generation Flow (Simplified)
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI (React)
+    participant Backend (Express)
+    participant Repomix
+
+    User->>UI: Request Repo Generation
+    UI->>Backend: Trigger Repomix run
+    Backend->>Repomix: Execute command
+    Repomix-->>Backend: Command Complete (Success/Fail)
+    Backend-->>UI: Generation Result (Filename or Error)
+    UI->>User: Display Status (Success/Error + Load File)
+```
 ### Repomix Generation Flow
 ```mermaid
 sequenceDiagram
