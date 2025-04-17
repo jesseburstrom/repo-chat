@@ -125,7 +125,6 @@ sequenceDiagram
     UI->>User: Displays model response
 ```
 
----
 
 ## Prerequisites
 
