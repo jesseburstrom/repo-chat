@@ -68,7 +68,8 @@ graph TD
     style Repomix fill:#f8d7da,stroke:#721c24
     style FileSystem fill:#fff3cd,stroke:#856404
     style GeminiAPI fill:#d4edda,stroke:#155724
-
+```
+```mermaid
 sequenceDiagram
     participant User
     participant UI (React)
