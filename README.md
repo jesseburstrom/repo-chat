@@ -90,14 +90,14 @@ sequenceDiagram
     participant U as User
     participant UI as UI (React)
     participant BE as Backend (Express)
-    participant R as Repomix
+    participant G as GeminiAPI
 
-    U->>UI: Request Gen
-    UI->>BE: Trigger Repomix
-    BE->>R: Execute Cmd
-    R-->>BE: Complete (OK/Fail)
-    BE-->>UI: Result (File/Error)
-    UI->>U: Display Status
+    U->>UI: Send Prompt (+Ctx)
+    UI->>BE: Forward Prompt+Ctx
+    BE->>G: Call Gemini API
+    G-->>BE: API Response
+    BE-->>UI: Return Response
+    UI->>U: Display Response
 ```
 ### Chat Interaction Flow (Simplified)
 ```mermaid
