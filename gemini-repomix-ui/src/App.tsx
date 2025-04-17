@@ -42,9 +42,6 @@ function App() {
    const [attachmentStatus, setAttachmentStatus] = useState<string | null>(null); // NEW: Status for attaching
    const attachmentStatusTimer = useRef<number | null>(null); // Timer for clearing status
    // --- End Repo Selector State ---
-
-   // Ref for the scrollable div
-  const scrollableAreaRef = useRef<HTMLDivElement>(null);
   
   // --- Utility to clear attachment status message ---
   const clearAttachmentStatus = useCallback(() => {
@@ -267,9 +264,6 @@ const loadRepoFileContent = useCallback(async (filename: string): Promise<boolea
 
     const userDisplayPrompt = prompt || `(Using attached file: ${attachedFileName})`;
     const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userDisplayPrompt }] };
-    // const currentHistory = [...chatHistory, newUserMessage];
-    // setChatHistory(currentHistory); // Optimistic UI update
-
 
     const historyForBackend: ChatMessage[] = chatHistory
     .slice(-MAX_HISTORY_TURNS * 2)
@@ -313,14 +307,6 @@ const loadRepoFileContent = useCallback(async (filename: string): Promise<boolea
       }
   }, [chatHistory, attachedFileContent, attachedFileName, clearAttachedFile]);
 
-  // --- Effect to scroll down ---
-  useEffect(() => {
-    if (scrollableAreaRef.current) {
-      // Scroll down when chatHistory changes OR when isLoading becomes true (after user sends message)
-      scrollableAreaRef.current.scrollTop = scrollableAreaRef.current.scrollHeight;
-    }
-    // Trigger scroll also when loading indicator appears for user message
-  }, [chatHistory, isLoading]);
 
   return (
     <div className="app-container">
@@ -329,7 +315,7 @@ const loadRepoFileContent = useCallback(async (filename: string): Promise<boolea
       </header>
 
       {/* This div contains everything that scrolls */}
-      <div className="scrollable-content-area" ref={scrollableAreaRef}> {/* <-- SCROLL container */}
+      <div className="scrollable-content-area" > {/* <-- SCROLL container */}
 
         {/* Repomix Form inside scroll area */}
         <RepomixForm
