@@ -118,3 +118,79 @@ sequenceDiagram
     UI->>UI: Renders model response (with Markdown/Syntax Highlighting)
     UI->>User: Displays model response
 ```
+Prerequisites
+Node.js: LTS version recommended (e.g., v18 or v20+). Includes npm.
+Git: Required by repomix to clone repositories.
+Google Gemini API Key: Obtain an API key from Google AI Studio.
+Setup
+Clone the repository:
+git clone <your-repository-url>
+cd <repository-directory>
+Use code with caution.
+Bash
+Backend Setup:
+cd backend
+npm install # or yarn install
+Use code with caution.
+Bash
+Create a .env file in the backend directory:
+touch .env
+Use code with caution.
+Bash
+Add your Google Gemini API key to the .env file:
+# backend/.env
+GEMINI_API_KEY=YOUR_API_KEY_HERE
+Use code with caution.
+Env
+Frontend Setup:
+cd ../gemini-repomix-ui
+npm install # or yarn install
+Use code with caution.
+Bash
+Running the Application
+You need to run both the backend and frontend servers concurrently.
+Backend Server
+cd backend
+npm run start # Check package.json for the exact start script (e.g., could be 'dev' if using ts-node-dev)
+Use code with caution.
+Bash
+The backend server will typically start on http://localhost:8003. Generated description files will be stored in backend/generated_files.
+Frontend Dev Server
+cd gemini-repomix-ui
+npm run dev
+Use code with caution.
+Bash
+The frontend development server (Vite) will start, usually on http://localhost:5173.
+Access the application in your browser at the URL provided by the Vite server, likely http://localhost:5173/repochat/ (Note the /repochat/ base path defined in vite.config.ts).
+The Vite dev server is configured to proxy requests starting with /api to the backend server running on port 8003.
+Usage
+Start both the backend and frontend servers as described above.
+Open the application in your web browser (e.g., http://localhost:5173/repochat/).
+Generate a Description:
+Enter the full URL of a public GitHub repository (e.g., https://github.com/user/repo.git).
+(Optional) Adjust the include/exclude patterns. Defaults target common code files and exclude logs/temp files.
+Click "Generate Description File".
+Wait for the process to complete. The backend runs repomix, which clones the repo and creates the .md file.
+Upon successful generation, the file will be automatically selected and its content loaded into the chat context.
+Or Load an Existing Description:
+If descriptions have been generated previously, use the "Load Generated Description" dropdown to select one.
+The content of the selected file will be loaded into the chat context.
+Chat with Gemini:
+The loaded description file's name will appear below the input area.
+Type your question or prompt about the repository code (e.g., "Explain the purpose of the main function in server.ts", "Summarize the UI components", "What state management is used?").
+Press Enter or click "Send".
+The frontend sends your prompt along with the content of the loaded description file to the backend, which forwards it to the Gemini API.
+View the model's response in the chat interface. The loaded file context is cleared after a successful response, ready for the next interaction (which might use the same file if selected again or a different one).
+Environment Variables
+GEMINI_API_KEY (Required): Your API key for accessing the Google Gemini API. Place this in the backend/.env file.
+Technology Stack
+Backend: Node.js, Express, TypeScript
+Frontend: React, Vite, TypeScript, CSS
+API: Google Gemini Pro
+Code Processing: Repomix
+Syntax Highlighting: Shikiji
+Contributing
+Contributions are welcome! Please feel free to submit pull requests or open issues.
+(Optional: Add more specific contribution guidelines if needed - e.g., coding style, testing requirements)
+License
+This project is licensed under the MIT License - see the LICENSE file for details. (You should create a LICENSE file with the MIT license text).
