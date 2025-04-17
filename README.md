@@ -80,20 +80,24 @@ sequenceDiagram
 
     User->>UI: Enters GitHub Repo URL & Clicks Generate
     UI->>Backend: POST /api/run-repomix (repoUrl, include, exclude)
-    Backend->>Repomix: Executes `npx repomix --remote <url> --output <path> ...`
-    Repomix->>FileSystem: Clones repo (temp), processes files, writes `full_description_user_repo.md`
+    Backend->>Repomix: Executes `npx repomix ... --output temp_file.md`
+    Note over Repomix, Backend: Repomix clones repo, processes files, writes temp file, outputs summary to stdout.
     Repomix-->>Backend: Command finishes (stdout/stderr)
+
     alt Command Successful
-        Backend->>UI: Response { success: true, outputFilename: "..." }
+        Backend->>Backend: Extracts & cleans summary from stdout
+        Backend->>FileSystem: Writes cleaned `user_repo_pack_summary.txt`
+        Backend->>FileSystem: Renames `temp_file.md` to `user_repo.md`
+        Backend->>UI: Response { success: true, outputFilename: "user_repo.md", message: "..." }
+
         UI->>Backend: GET /api/list-generated-files (Refreshes list)
-        Backend->>FileSystem: Reads directory listing
-        FileSystem-->>Backend: List of files
-        Backend-->>UI: Response { success: true, data: [...] }
-        UI->>Backend: GET /api/get-file-content/<outputFilename> (Auto-loads)
-        Backend->>FileSystem: Reads content of <outputFilename>
+        Backend-->>UI: Response { success: true, data: [... only .md files] }
+
+        UI->>Backend: GET /api/get-file-content/user_repo.md (Auto-loads main file)
+        Backend-->>FileSystem: Read `user_repo.md`
         FileSystem-->>Backend: File Content
         Backend-->>UI: Response { success: true, content: "..." }
-        UI->>User: Shows success message, updates dropdown, attaches content
+        UI->>User: Shows success message, updates dropdown, attaches .md content
     else Command Fails
         Backend->>UI: Response { success: false, error: "..." }
         UI->>User: Shows error message
