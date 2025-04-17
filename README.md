@@ -68,21 +68,33 @@ graph TD
     style Repomix fill:#f8d7da,stroke:#721c24
     style FileSystem fill:#fff3cd,stroke:#856404
     style GeminiAPI fill:#d4edda,stroke:#155724
-```
+
 sequenceDiagram
     participant User
     participant UI (React)
     participant Backend (Express)
-    participant GeminiAPI
+    participant Repomix (CLI via npx)
+    participant FileSystem
 
-    User->>UI: Selects generated file (or keeps loaded one)
-    User->>UI: Types prompt & Clicks Send (or Enter)
-    UI->>UI: Combines Attached File Content + User Prompt
-    UI->>Backend: POST /api/call-gemini (history, combinedPrompt)
-    Backend->>GeminiAPI: Sends chat history + new combined message
-    GeminiAPI-->>Backend: Receives model response text
-    Backend->>UI: Response { success: true, text: "..." }
-    UI->>UI: Clears attached file state
-    UI->>UI: Renders model response (with Markdown/Syntax Highlighting)
-    UI->>User: Displays model response
+    User->>UI: Enters GitHub Repo URL & Clicks Generate
+    UI->>Backend: POST /api/run-repomix (repoUrl, include, exclude)
+    Backend->>Repomix: Executes `npx repomix --remote <url> --output <path> ...`
+    Repomix->>FileSystem: Clones repo (temp), processes files, writes `full_description_user_repo.md`
+    Repomix-->>Backend: Command finishes (stdout/stderr)
+    alt Command Successful
+        Backend->>UI: Response { success: true, outputFilename: "..." }
+        UI->>Backend: GET /api/list-generated-files (Refreshes list)
+        Backend->>FileSystem: Reads directory listing
+        FileSystem-->>Backend: List of files
+        Backend-->>UI: Response { success: true, data: [...] }
+        UI->>Backend: GET /api/get-file-content/<outputFilename> (Auto-loads)
+        Backend->>FileSystem: Reads content of <outputFilename>
+        FileSystem-->>Backend: File Content
+        Backend-->>UI: Response { success: true, content: "..." }
+        UI->>User: Shows success message, updates dropdown, attaches content
+    else Command Fails
+        Backend->>UI: Response { success: false, error: "..." }
+        UI->>User: Shows error message
+    end
+```
     
