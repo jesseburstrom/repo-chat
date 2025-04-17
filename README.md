@@ -84,6 +84,21 @@ sequenceDiagram
     Backend-->>UI: Generation Result (Filename or Error)
     UI->>User: Display Status (Success/Error + Load File)
 ```
+### Repomix Generation Flow (Simplified)
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant UI as UI (React)
+    participant BE as Backend (Express)
+    participant R as Repomix
+
+    U->>UI: Request Gen
+    UI->>BE: Trigger Repomix
+    BE->>R: Execute Cmd
+    R-->>BE: Complete (OK/Fail)
+    BE-->>UI: Result (File/Error)
+    UI->>U: Display Status
+```
 ### Chat Interaction Flow (Simplified)
 ```mermaid
 sequenceDiagram
