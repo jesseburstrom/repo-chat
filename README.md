@@ -84,6 +84,21 @@ sequenceDiagram
     Backend-->>UI: Generation Result (Filename or Error)
     UI->>User: Display Status (Success/Error + Load File)
 ```
+### Chat Interaction Flow (Simplified)
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI (React)
+    participant Backend (Express)
+    participant GeminiAPI
+
+    User->>UI: Send Prompt (+ Attached Context)
+    UI->>Backend: Forward Prompt + Context
+    Backend->>GeminiAPI: Call API with Message
+    GeminiAPI-->>Backend: API Response Text
+    Backend-->>UI: Return Response Text
+    UI->>User: Display Model Response
+```
 ### Repomix Generation Flow
 ```mermaid
 sequenceDiagram
@@ -137,7 +152,6 @@ sequenceDiagram
     UI->>UI: Renders model response (Markdown/Syntax Highlighting)
     UI->>User: Displays model response (Chat auto-scrolls)
 ```
-
 ## Prerequisites
 
 *   **Node.js:** LTS version recommended (e.g., v18 or v20+). Includes `npm`.
