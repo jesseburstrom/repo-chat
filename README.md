@@ -113,14 +113,14 @@ sequenceDiagram
 
     User->>UI: Selects generated file (or keeps loaded one)
     User->>UI: Types prompt & Clicks Send (or Enter)
-    UI->>UI: Combines Attached File Content + User Prompt
+    UI->>UI: Combines Attached .md File Content + User Prompt
     UI->>Backend: POST /api/call-gemini (history, combinedPrompt)
     Backend->>GeminiAPI: Sends chat history + new combined message
     GeminiAPI-->>Backend: Receives model response text
     Backend->>UI: Response { success: true, text: "..." }
     UI->>UI: Clears attached file state
-    UI->>UI: Renders model response (with Markdown/Syntax Highlighting)
-    UI->>User: Displays model response
+    UI->>UI: Renders model response (Markdown/Syntax Highlighting)
+    UI->>User: Displays model response (Chat auto-scrolls)
 ```
 
 ## Prerequisites
