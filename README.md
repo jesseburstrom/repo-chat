@@ -69,6 +69,7 @@ graph TD
     style FileSystem fill:#fff3cd,stroke:#856404
     style GeminiAPI fill:#d4edda,stroke:#155724
 ```
+### Repomix Generation Flow
 ```mermaid
 sequenceDiagram
     participant User
@@ -98,6 +99,7 @@ sequenceDiagram
         UI->>User: Shows error message
     end
 ```
+### Chat Interaction Flow
 ```mermaid
 sequenceDiagram
     participant User
