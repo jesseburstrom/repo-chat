@@ -53,15 +53,15 @@ The application consists of a React frontend and a Node.js backend.
 
 ```mermaid
 graph TD
-    User[<fa:fa-user> User] --> UI{<fa:fa-window-maximize> React Frontend (Vite)};
-    UI -->|HTTP API Request<br>(/api/...)| Backend{<fa:fa-server> Node.js Backend (Express)};
-    Backend -->|Run Command| Repomix(npx repomix);
-    Repomix -->|Writes File| FileSystem[<fa:fa-file-alt> generated_files/*.md];
-    Backend -->|Reads File| FileSystem;
-    Backend -->|API Call| GeminiAPI[<fa:fa-brain> Google Gemini API];
-    GeminiAPI -->|Response| Backend;
-    Backend -->|HTTP Response| UI;
-    UI -->|Displays Info| User;
+    User["<fa:fa-user> User"] --> UI;
+    UI{"<fa:fa-window-maximize> React Frontend (Vite)"} -- HTTP API Request /api/... --> Backend;
+    Backend{"<fa:fa-server> Node.js Backend (Express)"} -- Run Command --> Repomix;
+    Repomix("npx repomix") -- Writes File --> FileSystem["<fa:fa-file-alt> generated_files/*.md"];
+    Backend -- Reads File --> FileSystem;
+    Backend -- API Call --> GeminiAPI["<fa:fa-brain> Google Gemini API"];
+    GeminiAPI -- Response --> Backend;
+    Backend -- HTTP Response --> UI;
+    UI -- Displays Info --> User;
 
     style UI fill:#f9f,stroke:#333,stroke-width:2px;
     style Backend fill:#ccf,stroke:#333,stroke-width:2px;
