@@ -98,7 +98,7 @@ sequenceDiagram
     Gemini API-->>Backend (Node.js API): Returns model response
     Backend (Node.js API)-->>Frontend (React UI): Returns { success: true, text: "AI response" }
     Frontend (React UI)->>User: Displays AI response in chat
-
+```
 
 Setup and Installation
 
