@@ -69,6 +69,36 @@ graph TD
     style FileSystem fill:#fff3cd,stroke:#856404
     style GeminiAPI fill:#d4edda,stroke:#155724
 ```
+### Repomix Generation Flow (Simplified)
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI (React)
+    participant Backend (Express)
+    participant Repomix
+
+    User->>UI: Request Repo Generation
+    UI->>Backend: Trigger Repomix run
+    Backend->>Repomix: Execute command
+    Repomix-->>Backend: Command Complete (Success/Fail)
+    Backend-->>UI: Generation Result (Filename or Error)
+    UI->>User: Display Status (Success/Error + Load File)
+```
+### Chat Interaction Flow (Simplified)
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI (React)
+    participant Backend (Express)
+    participant GeminiAPI
+
+    User->>UI: Send Prompt (+ Attached Context)
+    UI->>Backend: Forward Prompt + Context
+    Backend->>GeminiAPI: Call API with Message
+    GeminiAPI-->>Backend: API Response Text
+    Backend-->>UI: Return Response Text
+    UI->>User: Display Model Response
+```
 ### Repomix Generation Flow
 ```mermaid
 sequenceDiagram
@@ -80,20 +110,24 @@ sequenceDiagram
 
     User->>UI: Enters GitHub Repo URL & Clicks Generate
     UI->>Backend: POST /api/run-repomix (repoUrl, include, exclude)
-    Backend->>Repomix: Executes `npx repomix --remote <url> --output <path> ...`
-    Repomix->>FileSystem: Clones repo (temp), processes files, writes `full_description_user_repo.md`
+    Backend->>Repomix: Executes `npx repomix ... --output temp_file.md`
+    Note over Repomix, Backend: Repomix clones repo, processes files, writes temp file, outputs summary to stdout.
     Repomix-->>Backend: Command finishes (stdout/stderr)
+
     alt Command Successful
-        Backend->>UI: Response { success: true, outputFilename: "..." }
+        Backend->>Backend: Extracts & cleans summary from stdout
+        Backend->>FileSystem: Writes cleaned `user_repo_pack_summary.txt`
+        Backend->>FileSystem: Renames `temp_file.md` to `user_repo.md`
+        Backend->>UI: Response { success: true, outputFilename: "user_repo.md", message: "..." }
+
         UI->>Backend: GET /api/list-generated-files (Refreshes list)
-        Backend->>FileSystem: Reads directory listing
-        FileSystem-->>Backend: List of files
-        Backend-->>UI: Response { success: true, data: [...] }
-        UI->>Backend: GET /api/get-file-content/<outputFilename> (Auto-loads)
-        Backend->>FileSystem: Reads content of <outputFilename>
+        Backend-->>UI: Response { success: true, data: [... only .md files] }
+
+        UI->>Backend: GET /api/get-file-content/user_repo.md (Auto-loads main file)
+        Backend-->>FileSystem: Read `user_repo.md`
         FileSystem-->>Backend: File Content
         Backend-->>UI: Response { success: true, content: "..." }
-        UI->>User: Shows success message, updates dropdown, attaches content
+        UI->>User: Shows success message, updates dropdown, attaches .md content
     else Command Fails
         Backend->>UI: Response { success: false, error: "..." }
         UI->>User: Shows error message
@@ -109,16 +143,15 @@ sequenceDiagram
 
     User->>UI: Selects generated file (or keeps loaded one)
     User->>UI: Types prompt & Clicks Send (or Enter)
-    UI->>UI: Combines Attached File Content + User Prompt
+    UI->>UI: Combines Attached .md File Content + User Prompt
     UI->>Backend: POST /api/call-gemini (history, combinedPrompt)
     Backend->>GeminiAPI: Sends chat history + new combined message
     GeminiAPI-->>Backend: Receives model response text
     Backend->>UI: Response { success: true, text: "..." }
     UI->>UI: Clears attached file state
-    UI->>UI: Renders model response (with Markdown/Syntax Highlighting)
-    UI->>User: Displays model response
+    UI->>UI: Renders model response (Markdown/Syntax Highlighting)
+    UI->>User: Displays model response (Chat auto-scrolls)
 ```
-
 ## Prerequisites
 
 *   **Node.js:** LTS version recommended (e.g., v18 or v20+). Includes `npm`.
