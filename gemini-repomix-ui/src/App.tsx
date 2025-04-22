@@ -12,7 +12,7 @@ export interface ChatMessage {
   parts: [{ text: string }];
 }
 var prefix = '';
-prefix = '/repochat';
+//prefix = '/repochat';
 
 const MAX_HISTORY_TURNS = 5;
 
