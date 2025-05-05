@@ -22,7 +22,6 @@ A web application that leverages Google's Gemini Pro API and the `repomix` tool 
 *   [Environment Variables](#environment-variables)
 *   [Technology Stack](#technology-stack)
 *   [Contributing](#contributing)
-*   [License](#license)
 
 ---
 
@@ -261,10 +260,6 @@ Contributions are welcome! Please feel free to submit pull requests or open issu
 
 *(Optional: Add more specific contribution guidelines if needed - e.g., coding style, testing requirements)*
 
----
 
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 ```
 
