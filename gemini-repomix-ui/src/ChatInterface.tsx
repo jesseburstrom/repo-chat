@@ -1,6 +1,6 @@
 
 // src/ChatInterface.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getHighlighter, bundledLanguages } from 'shikiji';
@@ -59,6 +59,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history }) => {
 
   // Shikiji renderer for fenced code blocks
   const CodeBlockRenderer = ({ node, inline, className, children, ...props }: any) => {
+    // --- State for Copy Button Feedback ---
+    const [copyButtonText, setCopyButtonText] = useState('Copy');
+    // --- End State ---
+
     const match = /language-(\w+)/.exec(className || '');
     const lang = match ? match[1] : 'plaintext';
     const codeString = String(children).replace(/\n$/, '');
@@ -85,26 +89,57 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history }) => {
           {children}
         </code>
       );
+    // Function to handle the copy action
+    const handleCopyClick = () => {
+      if (!navigator.clipboard) {
+        console.warn('Clipboard API not available');
+        setCopyButtonText('Failed'); // Indicate failure if API is missing
+        setTimeout(() => setCopyButtonText('Copy'), 2000);
+        return;
+      }
+      navigator.clipboard.writeText(codeString)
+        .then(() => {
+          setCopyButtonText('Copied!');
+          setTimeout(() => setCopyButtonText('Copy'), 1500); // Reset after 1.5 seconds
+        })
+        .catch(err => {
+          console.error('Failed to copy text: ', err);
+          setCopyButtonText('Failed');
+          setTimeout(() => setCopyButtonText('Copy'), 2000);
+        });
+    };
 
-    if (!highlighter) {
-      return (
-        <pre className={`language-${lang}`}>
-          <code className={`language-${lang}`} {...props}>
-            {children}
-          </code>
-        </pre>
-      );
-    }
+    // Create the language label element (only for block code)
+    // Display 'plaintext' if no language was explicitly set in the markdown
+    const languageLabel = (
+      <span className="code-language-label">{lang}</span>
+  );
 
+   // --- Create the Copy Button ---
+   const copyButton = (
+    <button
+      className={`copy-code-button ${copyButtonText !== 'Copy' ? 'copied' : ''}`}
+      onClick={handleCopyClick}
+      title="Copy code to clipboard" // Accessibility
+    >
+      {copyButtonText}
+    </button>
+  );
+  // --- End Copy Button ---
+  let codeBlockElement: JSX.Element;
+
+  // Try using Shikiji highlighter
+  if (highlighter) {
     try {
       const html = highlighter.codeToHtml(codeString, {
         lang,
         theme: 'material-theme-lighter',
       });
-      return <div dangerouslySetInnerHTML={{ __html: html }} {...props} />;
+      codeBlockElement = <div dangerouslySetInnerHTML={{ __html: html }} />;
     } catch (err) {
       console.warn(`Shikiji failed for "${lang}":`, err);
-      return (
+      // Fallback to default rendering if highlighter fails
+      codeBlockElement = (
         <pre className={`language-${lang}`}>
           <code className={`language-${lang}`} {...props}>
             {children}
@@ -112,38 +147,58 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history }) => {
         </pre>
       );
     }
-  };
+  } else {
+    // Fallback rendering (if highlighter not ready)
+    codeBlockElement = (
+      <pre className={`language-${lang}`}>
+        <code className={`language-${lang}`} {...props}>
+          {children}
+        </code>
+      </pre>
+    );
+  }
 
+  // --- Return container with label, button, and code block ---
   return (
-    <div className="chat-interface">
-      {history.map((message, index) => (
-        <div key={index} className={`chat-message ${message.role}`}>
-          <span className="message-role">{message.role === 'user' ? 'You' : 'Model'}</span>
-          <div className="message-content">
-            {message.role === 'model' ? (
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{ code: CodeBlockRenderer }}
-              >
-                {message.parts[0].text}
-              </ReactMarkdown>
-            ) : (
-              message.parts[0].text.split('\n').map((line, i) => (
-                <React.Fragment key={i}>
-                  {line}
-                  <br />
-                </React.Fragment>
-              ))
-            )}
-          </div>
-        </div>
-      ))}
-
-      {/* Invisible anchor that we scroll to */}
-      <div ref={bottomRef} />
+    <div className="code-block-wrapper" {...props}> {/* Outer wrapper for positioning */}
+      <div className="code-block-header"> {/* Container for label and button */}
+        {languageLabel}
+        {copyButton}
+      </div>
+      {codeBlockElement} {/* The actual code block (Shikiji div or pre/code) */}
     </div>
   );
+  // --- End Return ---
 };
+// --- End CodeBlockRenderer ---
 
+return (
+  <div className="chat-interface">
+    {history.map((message, index) => (
+      <div key={index} className={`chat-message ${message.role}`}>
+        <span className="message-role">{message.role === 'user' ? 'You' : 'Model'}</span>
+        <div className="message-content">
+          {message.role === 'model' ? (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{ code: CodeBlockRenderer }} // Use the updated renderer
+            >
+              {message.parts[0].text}
+            </ReactMarkdown>
+          ) : (
+            message.parts[0].text.split('\n').map((line, i) => (
+              <React.Fragment key={i}>
+                {line}
+                <br />
+              </React.Fragment>
+            ))
+          )}
+        </div>
+      </div>
+    ))}
+    <div ref={bottomRef} /> {/* Scroll target */}
+  </div>
+);
+};
 export default ChatInterface;
 
