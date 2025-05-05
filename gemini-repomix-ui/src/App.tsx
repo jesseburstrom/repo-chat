@@ -296,7 +296,7 @@ const loadRepoFileContent = useCallback(async (filename: string): Promise<boolea
 
           const newModelMessage: ChatMessage = { role: 'model', parts: [{ text: result.text }] };
           setChatHistory(prev => [...prev, newModelMessage]);
-          clearAttachedFile(); // Clear file on success
+          //clearAttachedFile(); // Clear file on success
 
       } catch (apiError: any) {
           setError(`Error: ${apiError.message}`);

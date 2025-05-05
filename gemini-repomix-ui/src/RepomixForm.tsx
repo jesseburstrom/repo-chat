@@ -21,7 +21,7 @@ const RepomixForm: React.FC<RepomixFormProps> = ({
 }) => {
     //const [repoUrl, setRepoUrl] = useState('');
     // Default values 
-    const [includePatterns, setIncludePatterns] = useState('**/*.dart,**/*.ts,**/*.tsx,**/*.py,**/*.cs');
+    const [includePatterns, setIncludePatterns] = useState('**/*.css,**/*.dart,**/*.ts,**/*.tsx,**/*.py,**/*.cs,**/*.go');
     const [excludePatterns, setExcludePatterns] = useState('*.log,tmp/'); // repomix uses --ignore
 
     const handleSubmit = (event: React.FormEvent) => {

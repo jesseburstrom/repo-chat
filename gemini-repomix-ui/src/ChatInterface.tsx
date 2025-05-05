@@ -45,8 +45,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history }) => {
 
   /* ----- Auto‑scroll to the newest message whenever history grows ---- */
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [history]);
+    // Only scroll if the history has messages AND the *last* message is from the model
+    if (history.length > 0) {
+      const lastMessage = history[history.length - 1];
+      if (lastMessage.role !== 'model') {
+        // Scroll to the bottom smoothly only when a model response arrives
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+      // If the last message role is 'user', do nothing, preserving the scroll position.
+    }
+  }, [history]); // Keep history as the dependency
   /* ------------------------------------------------------------------- */
 
   // Shikiji renderer for fenced code blocks
@@ -54,6 +62,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history }) => {
     const match = /language-(\w+)/.exec(className || '');
     const lang = match ? match[1] : 'plaintext';
     const codeString = String(children).replace(/\n$/, '');
+    // --- NEW Logic for single-word triple-backticks ---
+    // Heuristic: Check if it's NOT inline, has no language specified (no `language-` class),
+    // and contains no spaces or newlines (likely a single word/token).
+    const isLikelySingleWordBlock =
+        !inline &&                           // Came from ```...```
+        !match &&                            // No language specified (e.g., ```javascript)
+        codeString.length > 0 &&             // Not empty
+        !codeString.includes(' ') &&         // No spaces
+        !codeString.includes('\n');          // No newlines
+
+    if (isLikelySingleWordBlock) {
+      // Render as bold instead of a code block
+      // Using the trimmed string here is fine
+      return <strong className="non-standard-code-highlight" {...props}>{codeString}</strong>;
+    }
+    // --- END NEW Logic ---
 
     if (inline)
       return (

@@ -38,10 +38,13 @@
   }
   
   .message-content {
-     white-space: pre-wrap; /* Preserve whitespace and newlines */
      font-size: 1rem;
   }
   
+  .message-content p {
+    white-space: normal; /* Collapse whitespace, allow auto line breaks */
+    margin-bottom: 1em; /* Add space between paragraphs */
+  }
   .message-content br {
       /* Ensure <br> takes minimal space */
       content: "";
@@ -61,6 +64,8 @@
   /* Theme styles (like background/text color) are usually applied by Shikiji */
   /* You might only need layout styles here */
   line-height: 1.4; /* Adjust line height for code */
+  white-space: pre;
+  background-color: #f8f8f8;
 }
 
 /* Keep inline code styles */
