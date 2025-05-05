@@ -173,7 +173,11 @@ function App() {
         setAttachedFileName(filename);
 
         // --- Attempt to parse the loaded content ---
+        console.log(`Received content from backend for ${filename}. Length: ${result.content?.length}`);
+        // Log the raw content received ON THE CLIENT
+        // console.log("Raw content received:", result.content); // Be careful logging large content
         const parsedData = parseRepomixFile(result.content);
+        console.log("Parsed data:", parsedData); // Check if this is null
         if (parsedData) {
             setParsedRepomixData(parsedData);
             setAttachmentStatus(`Attached & Parsed ${filename} successfully.`);
