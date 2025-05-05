@@ -1,12 +1,12 @@
 /* src/FileTree.css */
 .file-tree-panel {
     padding: 10px;
-    background-color: #f8f9fa; /* Match other side panels */
+    background-color: #f8f9fa;
     border-right: 1px solid #e0e0e0;
-    overflow-y: auto; /* Enable scroll if list is long */
-    height: 100%; /* Take full height of its container */
-    flex-shrink: 0; /* Prevent shrinking */
-    width: 250px; /* Example fixed width */
+    overflow-y: auto;
+    height: 100%;
+    flex-shrink: 0;
+    width: 250px; /* Or your desired width */
 }
 
 .file-tree-panel.empty {
@@ -31,8 +31,9 @@
     margin: 0;
 }
 
+/* Style for individual items (files/folders) */
 .file-tree-panel li {
-    padding: 5px 8px;
+    padding: 4px 8px; /* Adjust padding */
     cursor: pointer;
     border-radius: 4px;
     white-space: nowrap;
@@ -40,14 +41,28 @@
     text-overflow: ellipsis;
     font-size: 0.9em;
     transition: background-color 0.15s ease;
+     /* Indentation is now handled by inline style 'paddingLeft' */
 }
 
 .file-tree-panel li:hover {
     background-color: #e9ecef;
 }
 
-.file-tree-panel li.selected {
-    background-color: #cfe2ff; /* Bootstrap primary light */
+/* Style for selected *files* */
+.file-tree-panel li.file.selected {
+    background-color: #cfe2ff;
     font-weight: 500;
-    color: #0a58ca; /* Bootstrap primary dark */
+    color: #0a58ca;
+}
+
+/* Optional: Style folders differently */
+.file-tree-panel li.folder {
+    /* font-weight: bold; */
+    cursor: default; /* Folders aren't clickable yet */
+}
+
+/* Ensure nested ULs have no extra padding */
+.file-tree-panel ul ul {
+    padding-left: 0; /* Remove default UL padding */
+    margin-left: 0; /* Remove default UL margin */
 }

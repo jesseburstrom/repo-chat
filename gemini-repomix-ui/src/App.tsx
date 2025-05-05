@@ -46,6 +46,18 @@ function App() {
   const [selectedFileContent, setSelectedFileContent] = useState<string | null>(null);
   const [isLoadingSelectedFile, setIsLoadingSelectedFile] = useState(false); // For clarity, separate loading state
 
+  // --- NEW: Full Screen State ---
+  const [isFullScreenView, setIsFullScreenView] = useState(false);
+
+  // --- Toggle Function ---
+  const toggleFullScreenView = () => {
+    if (parsedRepomixData) { // Only allow toggle if file view is active
+        setIsFullScreenView(prev => !prev);
+    } else {
+        setIsFullScreenView(false); // Ensure it's off if no file view
+    }
+  };
+
   const clearAttachmentStatus = useCallback(() => {
       // ... (implementation unchanged)
       if (attachmentStatusTimer.current) {
@@ -88,8 +100,16 @@ function App() {
     setParsedRepomixData(null); // Clear parsed data
     setSelectedFilePath(null);  // Clear selected file
     setSelectedFileContent(null); // Clear displayed content
+    setIsFullScreenView(false);
     console.log("All attached/parsed file data cleared.");
   }, []);
+
+  // --- Ensure full screen turns off if parsedData becomes null ---
+  useEffect(() => {
+    if (!parsedRepomixData) {
+        setIsFullScreenView(false);
+    }
+  }, [parsedRepomixData]);
 
   // --- Handle File Selection in Tree ---
   const handleSelectFile = useCallback((filePath: string) => {
@@ -341,13 +361,22 @@ function App() {
 
 
   return (
-      <div className="app-container">
+      <div className={`app-container ${isFullScreenView ? 'full-screen-file-view' : ''}`}>
           <header className="app-header">
               <h1>Gemini Repomix Assistant</h1>
+              {parsedRepomixData && ( // Only show button when file view is possible
+                  <button
+                    onClick={toggleFullScreenView}
+                    className="fullscreen-toggle-button" // Add a class for styling
+                    title={isFullScreenView ? "Exit Full Screen View" : "Expand File View"}
+                  >
+                    {isFullScreenView ? '📰 Collapse' : '↔️ Expand'}
+                  </button>
+              )}
           </header>
 
           {/* --- NEW: Main Content Wrapper for Flex Layout --- */}
-          <div className="main-content-wrapper">
+          <div className={`main-content-wrapper ${isFullScreenView ? 'full-screen-active' : ''}`}>
 
               {/* --- Conditional FileTree Panel (Left) --- */}
               {parsedRepomixData && (

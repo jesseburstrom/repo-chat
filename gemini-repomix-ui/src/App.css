@@ -23,6 +23,60 @@ html, body, #root {
   /* Remove overflow: hidden; if you had it */
 }
 
+/* Apply to the main app container */
+.app-container.full-screen-file-view {
+  width: 100%;        /* Use full browser width */
+  height: 100vh;       /* Use full browser height */
+  max-width: none;     /* Remove any max-width constraint */
+  margin: 0;           /* Remove centering margin */
+  border: none;        /* Remove side borders */
+  box-shadow: none;    /* Remove shadow */
+  overflow: hidden;    /* Prevent container scroll */
+}
+
+/* Hide chat/input column and footer */
+.app-container.full-screen-file-view .center-column,
+.app-container.full-screen-file-view .app-footer {
+  display: none;
+}
+
+/* Adjust the wrapper inside the full-screen container */
+.app-container.full-screen-file-view .main-content-wrapper {
+  height: calc(100vh - 60px); /* Adjust based on your header height */
+  /* Ensure it stretches */
+}
+
+/* Adjust FileTree panel in full screen */
+.app-container.full-screen-file-view .file-tree-panel {
+  width: 30%; /* Example: Give tree more relative space */
+  max-width: 400px; /* Optional: Add a max width */
+  height: 100%; /* Ensure it fills the wrapper height */
+}
+
+/* Adjust FileContent panel in full screen */
+.app-container.full-screen-file-view .file-content-panel {
+  width: auto;       /* Remove fixed width */
+  flex-grow: 1;      /* Allow it to take remaining space */
+  border-left: 1px solid #e0e0e0; /* Keep border */
+  height: 100%;      /* Ensure it fills the wrapper height */
+}
+
+/* Style the toggle button */
+.fullscreen-toggle-button {
+  position: absolute;
+  top: 15px; /* Adjust as needed */
+  right: 25px; /* Adjust as needed */
+  padding: 5px 10px;
+  font-size: 0.85em;
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  z-index: 10; /* Ensure it's above other header content if needed */
+}
+.fullscreen-toggle-button:hover {
+  background-color: #e0e0e0;
+}
 .app-header {
    padding: 15px 25px; /* Slightly more padding */
    border-bottom: 1px solid #e0e0e0;
