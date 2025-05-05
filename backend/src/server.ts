@@ -250,7 +250,7 @@ const handleRunRepomix = (
     const repomixExecutable = "npx repomix";
 
     // Command
-    let command = `${repomixExecutable} --remote "${repoUrl}" --output "${tempFullOutputPath}"`;
+    let command = `${repomixExecutable} --remote "${repoUrl}" --output "${tempFullOutputPath}" --style plain`;
     if (includePatterns) command += ` --include "${includePatterns}"`;
     if (excludePatterns) command += ` --ignore "${excludePatterns}"`;
 
