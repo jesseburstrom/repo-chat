@@ -1,0 +1,53 @@
+/* src/FileTree.css */
+.file-tree-panel {
+    padding: 10px;
+    background-color: #f8f9fa; /* Match other side panels */
+    border-right: 1px solid #e0e0e0;
+    overflow-y: auto; /* Enable scroll if list is long */
+    height: 100%; /* Take full height of its container */
+    flex-shrink: 0; /* Prevent shrinking */
+    width: 250px; /* Example fixed width */
+}
+
+.file-tree-panel.empty {
+    padding: 15px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.file-tree-panel h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 0.95em;
+    color: #343a40;
+    font-weight: 500;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 5px;
+}
+
+.file-tree-panel ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.file-tree-panel li {
+    padding: 5px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.9em;
+    transition: background-color 0.15s ease;
+}
+
+.file-tree-panel li:hover {
+    background-color: #e9ecef;
+}
+
+.file-tree-panel li.selected {
+    background-color: #cfe2ff; /* Bootstrap primary light */
+    font-weight: 500;
+    color: #0a58ca; /* Bootstrap primary dark */
+}

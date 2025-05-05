@@ -34,6 +34,26 @@ html, body, #root {
    color: #333;
 }
 
+/* --- NEW: Wrapper for the main content area below header/footer --- */
+.main-content-wrapper {
+  display: flex;
+  flex-direction: row; /* Arrange panels side-by-side */
+  flex-grow: 1; /* Take remaining vertical space */
+  overflow: hidden; /* Prevent this wrapper from scrolling */
+  height: calc(100vh - 60px - 35px); /* Adjust based on actual header/footer height */
+}
+
+/* --- NEW: Center Column (Chat + Input) --- */
+.center-column {
+  display: flex;
+  flex-direction: column; /* Stack scroll area and input vertically */
+  flex-grow: 1; /* Allow center column to take available horizontal space */
+  overflow: hidden; /* Prevent this column itself from scrolling */
+  /* Optional: Add borders if desired between panels */
+  /* border-left: 1px solid #e0e0e0; */
+  /* border-right: 1px solid #e0e0e0; */
+}
+
 /* --- Scrollable Area --- */
 .scrollable-content-area {
   flex-grow: 1; /* Allow this area to take up remaining vertical space */
@@ -71,6 +91,27 @@ html, body, #root {
   background-color: #f8d7da;
   border: 1px solid #f5c6cb;
 }
+
+/* Attachment Status styling */
+.attachment-status {
+  padding: 8px 12px;
+  margin-top: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.9em;
+  text-align: center; /* Center align text */
+  flex-shrink: 0; /* Prevent shrinking */
+}
+.attachment-status.success {
+  background-color: #d1e7dd; /* Bootstrap success background */
+  color: #0f5132; /* Bootstrap success text */
+  border: 1px solid #badbcc; /* Bootstrap success border */
+}
+.attachment-status.warning { /* For non-standard format or failure */
+  background-color: #fff3cd; /* Bootstrap warning background */
+  color: #664d03; /* Bootstrap warning text */
+  border: 1px solid #ffecb5; /* Bootstrap warning border */
+}
+
 /* --- Input Area (Fixed Below Scroll) --- */
 .input-area-container {
   flex-shrink: 0; /* Prevent input area from shrinking */

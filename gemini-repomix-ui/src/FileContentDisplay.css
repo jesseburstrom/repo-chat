@@ -1,0 +1,54 @@
+/* src/FileContentDisplay.css */
+.file-content-panel {
+    padding: 10px;
+    background-color: #ffffff; /* White background */
+    border-left: 1px solid #e0e0e0;
+    overflow: hidden; /* Let content-area handle scroll */
+    height: 100%; /* Take full height */
+    flex-shrink: 0;
+    width: 400px; /* Example fixed width */
+    display: flex;
+    flex-direction: column;
+}
+
+.file-content-panel h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-size: 0.95em;
+    color: #343a40;
+    font-weight: 500;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0; /* Prevent header from shrinking */
+}
+
+.file-content-panel .content-area {
+    flex-grow: 1; /* Take remaining vertical space */
+    overflow: auto; /* Enable scrollbars for content */
+    font-family: monospace;
+    font-size: 0.85em;
+    line-height: 1.4;
+}
+
+.file-content-panel .content-area pre {
+    margin: 0;
+    white-space: pre-wrap; /* Wrap long lines within pre */
+    word-wrap: break-word; /* Ensure words break correctly */
+}
+.file-content-panel .content-area code {
+     display: block; /* Ensure code block takes full width */
+     padding: 5px;
+}
+
+
+.file-content-panel .placeholder,
+.file-content-panel .loading-placeholder {
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    padding-top: 30px;
+    font-family: sans-serif; /* Reset font */
+}
