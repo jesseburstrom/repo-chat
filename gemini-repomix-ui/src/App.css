@@ -35,10 +35,10 @@ html, body, #root {
 }
 
 /* Hide chat/input column and footer */
-.app-container.full-screen-file-view .center-column,
+/* .app-container.full-screen-file-view .center-column,
 .app-container.full-screen-file-view .app-footer {
   display: none;
-}
+} */
 
 /* Adjust the wrapper inside the full-screen container */
 .app-container.full-screen-file-view .main-content-wrapper {
@@ -48,9 +48,21 @@ html, body, #root {
 
 /* Adjust FileTree panel in full screen */
 .app-container.full-screen-file-view .file-tree-panel {
-  width: 30%; /* Example: Give tree more relative space */
+  width: 20%; /* Example: Give tree more relative space */
   max-width: 400px; /* Optional: Add a max width */
   height: 100%; /* Ensure it fills the wrapper height */
+}
+
+.app-container.full-screen-file-view .center-column {
+  /* Keep it visible, but define its size */
+  width: 40%; /* Example: Give chat 30% */
+  flex-shrink: 0; /* Prevent shrinking */
+  height: 100%; /* Fill vertical space */
+  display: flex; /* Ensure its internal flex layout still works */
+  flex-direction: column;
+  overflow: hidden; /* Keep internal overflow hidden */
+  border-left: 1px solid #e0e0e0; /* Add separators */
+  border-right: 1px solid #e0e0e0;
 }
 
 /* Adjust FileContent panel in full screen */
