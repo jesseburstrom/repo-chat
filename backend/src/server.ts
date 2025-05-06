@@ -22,7 +22,7 @@ const genAI = new GoogleGenerativeAI(geminiApiKey);
 const generationConfig: GenerationConfig = { /* ... your config ... */ };
 const safetySettings = [ /* ... your settings ... */ ];
 const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-pro-preview-03-25",
+    model: "gemini-2.5-pro-preview-05-06",
     // safetySettings, // Apply safety settings if needed
     generationConfig,
 });
