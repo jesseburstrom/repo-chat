@@ -443,8 +443,9 @@ const handleSaveSystemPrompt = useCallback(async () => {
           {/* --- NEW: Main Content Wrapper for Flex Layout --- */}
           <div className={`main-content-wrapper ${isFullScreenView ? 'full-screen-active' : ''}`}>
 
-              {/* --- Conditional FileTree Panel (Left) --- */}
-              {parsedRepomixData && (
+              {/* --- MODIFIED: Conditional FileTree Panel (Left) --- */}
+              {/* Now renders only if a file is parsed AND the view is expanded */}
+              {parsedRepomixData && isFullScreenView && (
                   <FileTree
                       structure={parsedRepomixData.directoryStructure}
                       selectedFilePath={selectedFilePath}
@@ -525,8 +526,9 @@ const handleSaveSystemPrompt = useCallback(async () => {
                   />
               </div> {/* --- End Center Column --- */}
 
-              {/* --- Conditional FileContentDisplay Panel (Right) --- */}
-              {parsedRepomixData && (
+              {/* --- MODIFIED: Conditional FileContentDisplay Panel (Right) --- */}
+              {/* Now renders only if a file is parsed AND the view is expanded */}
+              {parsedRepomixData && isFullScreenView && (
                   <FileContentDisplay
                       filePath={selectedFilePath}
                       content={selectedFileContent}
