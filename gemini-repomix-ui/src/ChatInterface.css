@@ -145,3 +145,26 @@ font-size: 0.9em;
 .non-standard-code-highlight {
 font-weight: bold;
 }
+
+.code-block-actions { /* Ensure this exists if you don't have it */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compare-button { /* New button style */
+  padding: 2px 8px;
+  font-size: 0.75em;
+  font-family: sans-serif;
+  color: #333;
+  background-color: #e0e0e0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.compare-button:hover {
+  background-color: #d0d0d0;
+  border-color: #bbb;
+}

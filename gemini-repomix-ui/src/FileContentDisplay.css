@@ -52,3 +52,62 @@
     padding-top: 30px;
     font-family: sans-serif; /* Reset font */
 }
+
+.comparison-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    /* Using existing h4 style, but button needs its own */
+}
+
+.comparison-header h4 {
+    border-bottom: none; /* Remove border from h4 in this header */
+    margin-bottom: 0;
+}
+
+.close-comparison-button {
+    padding: 4px 10px;
+    font-size: 0.85em;
+    background-color: #e0e0e0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.close-comparison-button:hover {
+    background-color: #d0d0d0;
+}
+
+.comparison-panes {
+    display: flex;
+    flex-direction: row;
+    flex-grow: 1;
+    overflow: hidden; /* Prevent double scrollbars */
+    gap: 10px; /* Space between panes */
+    border-top: 1px solid #dee2e6; /* Separator from header */
+    padding-top: 10px;
+}
+
+.pane {
+    flex: 1; /* Each pane takes half the space */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Let .content-area handle scroll */
+    border: 1px solid #f0f0f0;
+    border-radius: 4px;
+}
+
+.pane h5 {
+    margin: 0;
+    padding: 5px 8px;
+    background-color: #f8f9fa;
+    font-size: 0.9em;
+    font-weight: 500;
+    border-bottom: 1px solid #e0e0e0;
+    flex-shrink: 0;
+}
+
+.pane .content-area {
+    /* Styles from .file-content-panel .content-area apply here */
+    background-color: #fdfdfd; /* Slightly different background for panes */
+}

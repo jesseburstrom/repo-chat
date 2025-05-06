@@ -13,12 +13,16 @@ export interface ChatMessage {
   role: "user" | "model";
   parts: [{ text: string }];
 }
-// --- DYNAMIC PREFIX ---
-// In development (npm run dev), import.meta.env.DEV will be true.
-// For production builds, import.meta.env.PROD will be true.
+
 const prefix = import.meta.env.DEV ? '' : '/repochat';
 console.log(`API Prefix set to: '${prefix}' (Mode: ${import.meta.env.MODE})`);
-// --- END DYNAMIC PREFIX ---
+
+interface ComparisonViewData {
+    filePath: string;
+    originalContent: string;
+    suggestedContent: string;
+}
+
 const MAX_HISTORY_TURNS = 5;
 
 function App() {
@@ -56,6 +60,9 @@ function App() {
   const [systemPromptMessage, setSystemPromptMessage] = useState<string | null>(null);
   const systemPromptMessageTimer = useRef<number | null>(null);
   // --- END System Prompt State ---
+
+  const [comparisonView, setComparisonView] = useState<ComparisonViewData | null>(null);
+
   // --- Load System Prompt on Mount ---
 useEffect(() => {
   const fetchSystemPrompt = async () => {
@@ -166,14 +173,18 @@ const handleSaveSystemPrompt = useCallback(async () => {
 
   // --- Ensure full screen turns off if parsedData becomes null ---
   useEffect(() => {
-    if (!parsedRepomixData) {
+    if (!parsedRepomixData && !comparisonView) {
         setIsFullScreenView(false);
     }
-  }, [parsedRepomixData]);
+  }, [parsedRepomixData, comparisonView]);
 
   // --- Handle File Selection in Tree ---
   const handleSelectFile = useCallback((filePath: string) => {
       if (!parsedRepomixData) return;
+
+      if (comparisonView) {
+        setComparisonView(null);
+    }
 
       setIsLoadingSelectedFile(true); // Indicate loading
       setSelectedFilePath(filePath);
@@ -190,7 +201,7 @@ const handleSaveSystemPrompt = useCallback(async () => {
           setIsLoadingSelectedFile(false);
       }, 50); // Short delay
 
-  }, [parsedRepomixData]);
+  }, [parsedRepomixData, comparisonView]);
 
 
   // Modified Load Content Function
@@ -359,6 +370,28 @@ const handleSaveSystemPrompt = useCallback(async () => {
     }
   }, [clearFileData, fetchAvailableRepos, loadRepoFileContent, clearAttachmentStatus]); // Use clearFileData dependency
 
+  const handleStartComparison = (filePath: string, suggestedContent: string) => {
+    if (parsedRepomixData?.fileContents[filePath]) {
+        setComparisonView({
+            filePath,
+            originalContent: parsedRepomixData.fileContents[filePath],
+            suggestedContent,
+        });
+        setSelectedFilePath(null); // Clear single file tree selection
+        setIsFullScreenView(true); // Automatically go to full screen for comparison
+    } else {
+        console.warn("Cannot start comparison: Original file content not found for", filePath);
+        setError(`Original content for ${filePath} not found in the loaded repomix data.`);
+    }
+};
+
+const handleCloseComparison = () => {
+    setComparisonView(null);
+    // Optional: Decide if you want to fall back to single file view or clear selection
+    // setSelectedFilePath(null);
+    // setIsFullScreenView(false); // Or keep it full screen if a file was selected in tree
+};
+
   // Handle Prompt Submit (Largely Unchanged, uses attachedFileContent)
   const handlePromptSubmit = useCallback(async (prompt: string) => {
       if (!prompt && !attachedFileContent) {
@@ -511,7 +544,7 @@ const handleSaveSystemPrompt = useCallback(async () => {
                           </div>
                       )}
                       {repoListError && <div className="error-message repo-error">Failed to load repo list: {repoListError}</div>}
-                      <ChatInterface history={chatHistory} />
+                      <ChatInterface history={chatHistory} onStartComparison={handleStartComparison} parsedRepomixData={parsedRepomixData}/>
                       {isLoading && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'user' && (
                           <div className="loading-indicator">Thinking...</div>
                       )}
@@ -532,7 +565,9 @@ const handleSaveSystemPrompt = useCallback(async () => {
                   <FileContentDisplay
                       filePath={selectedFilePath}
                       content={selectedFileContent}
-                      isLoading={isLoadingSelectedFile} // Pass loading state
+                      isLoading={isLoadingSelectedFile && !comparisonView} // Pass loading state
+                      comparisonData={comparisonView}
+                      onCloseComparison={handleCloseComparison}
                   />
               )}
 
