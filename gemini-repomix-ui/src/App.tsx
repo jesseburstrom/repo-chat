@@ -13,9 +13,12 @@ export interface ChatMessage {
   role: "user" | "model";
   parts: [{ text: string }];
 }
-let prefix = '';
-prefix = '/repochat'; // Ensure this is correct for your setup
-
+// --- DYNAMIC PREFIX ---
+// In development (npm run dev), import.meta.env.DEV will be true.
+// For production builds, import.meta.env.PROD will be true.
+const prefix = import.meta.env.DEV ? '' : '/repochat';
+console.log(`API Prefix set to: '${prefix}' (Mode: ${import.meta.env.MODE})`);
+// --- END DYNAMIC PREFIX ---
 const MAX_HISTORY_TURNS = 5;
 
 function App() {
@@ -45,6 +48,63 @@ function App() {
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const [selectedFileContent, setSelectedFileContent] = useState<string | null>(null);
   const [isLoadingSelectedFile, setIsLoadingSelectedFile] = useState(false); // For clarity, separate loading state
+
+  // --- NEW: System Prompt State ---
+  const [systemPrompt, setSystemPrompt] = useState<string>('');
+  const [showSystemPromptInput, setShowSystemPromptInput] = useState<boolean>(false);
+  const [isSystemPromptSaving, setIsSystemPromptSaving] = useState<boolean>(false);
+  const [systemPromptMessage, setSystemPromptMessage] = useState<string | null>(null);
+  const systemPromptMessageTimer = useRef<number | null>(null);
+  // --- END System Prompt State ---
+  // --- Load System Prompt on Mount ---
+useEffect(() => {
+  const fetchSystemPrompt = async () => {
+      console.log("Fetching system prompt...");
+      try {
+          const response = await fetch(`${prefix}/api/load-system-prompt`);
+          const result = await response.json();
+          if (result.success && typeof result.systemPrompt === 'string') {
+              setSystemPrompt(result.systemPrompt);
+              console.log("System prompt loaded from server.");
+          } else {
+              console.warn("Failed to load system prompt or none set:", result.error);
+              setSystemPrompt('');
+          }
+      } catch (err: any) {
+          console.error("Error fetching system prompt:", err);
+          setSystemPrompt('');
+      }
+  };
+  fetchSystemPrompt();
+}, []); // Empty dependency array: run once on mount
+
+// --- Save System Prompt ---
+const handleSaveSystemPrompt = useCallback(async () => {
+  setIsSystemPromptSaving(true);
+  setSystemPromptMessage(null);
+  if (systemPromptMessageTimer.current) clearTimeout(systemPromptMessageTimer.current);
+
+  console.log("Saving system prompt...");
+  try {
+      const response = await fetch(`${prefix}/api/save-system-prompt`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ systemPrompt }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+          throw new Error(result.error || 'Failed to save system prompt.');
+      }
+      setSystemPromptMessage('System prompt saved successfully!');
+      console.log("System prompt saved.");
+  } catch (err: any) {
+      setSystemPromptMessage(`Error saving: ${err.message}`);
+      console.error("Error saving system prompt:", err);
+  } finally {
+      setIsSystemPromptSaving(false);
+      systemPromptMessageTimer.current = setTimeout(() => setSystemPromptMessage(null), 3000);
+  }
+}, [systemPrompt]);
 
   // --- NEW: Full Screen State ---
   const [isFullScreenView, setIsFullScreenView] = useState(false);
@@ -333,7 +393,7 @@ function App() {
           .map(msg => ({ role: msg.role, parts: msg.parts }));
 
       setChatHistory(prev => [...prev, newUserMessage]);
-      console.log("Sending request to Backend Gemini Proxy");
+      console.log("Sending request to Backend Gemini Proxy with system prompt length:", systemPrompt.length);
 
       try {
           const response = await fetch(`${prefix}/api/call-gemini`, { // ... (fetch options unchanged)
@@ -344,6 +404,7 @@ function App() {
                 body: JSON.stringify({
                     history: historyForBackend,
                     newMessage: combinedPrompt,
+                    systemPrompt: systemPrompt,
                 }),
           });
           const result = await response.json();
@@ -361,7 +422,7 @@ function App() {
       } finally {
           setIsLoading(false);
       }
-  }, [chatHistory, attachedFileContent, attachedFileName, clearAttachmentStatus]); // Removed clearFileData dep
+  }, [chatHistory, attachedFileContent, attachedFileName, clearAttachmentStatus, systemPrompt]); // Removed clearFileData dep
 
 
   return (
@@ -409,6 +470,40 @@ function App() {
                           selectedValue={selectedRepoFile}
                           // disabled={isLoading || isGenerating} // Can still disable if needed
                       />
+                      {/* --- NEW System Prompt Area --- */}
+                      <div className="system-prompt-section"> {/* New container for styling */}
+                          <button
+                              onClick={() => setShowSystemPromptInput(prev => !prev)}
+                              className="toggle-system-prompt-button"
+                          >
+                              {showSystemPromptInput ? 'Hide' : 'Set'} System Prompt
+                          </button>
+                          {showSystemPromptInput && (
+                              <div className="system-prompt-input-area">
+                                  <textarea
+                                      value={systemPrompt}
+                                      onChange={(e) => setSystemPrompt(e.target.value)}
+                                      placeholder="Define the assistant's role, personality, and general instructions here..."
+                                      rows={4}
+                                      className="system-prompt-textarea"
+                                      disabled={isSystemPromptSaving}
+                                  />
+                                  <button
+                                      onClick={handleSaveSystemPrompt}
+                                      disabled={isSystemPromptSaving || !systemPrompt.trim()} // Disable if empty
+                                      className="save-system-prompt-button"
+                                  >
+                                      {isSystemPromptSaving ? 'Saving...' : 'Save System Prompt'}
+                                  </button>
+                                  {systemPromptMessage && (
+                                      <p className={`system-prompt-status ${systemPromptMessage.includes('Error') ? 'error' : 'success'}`}>
+                                          {systemPromptMessage}
+                                      </p>
+                                  )}
+                              </div>
+                          )}
+                      </div>
+                      {/* --- END System Prompt Area --- */}
                       {attachmentStatus && (
                           <div className={`attachment-status ${attachmentStatus.includes('Failed') || attachmentStatus.includes('non-standard') ? 'warning' : 'success'}`}>
                               {attachmentStatus}

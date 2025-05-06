@@ -10,6 +10,90 @@ html, body, #root {
   box-sizing: inherit;
 }
 
+/* --- System Prompt Section --- */
+.system-prompt-section {
+  padding: 15px 0; /* Match other form paddings if inside similar container, or adjust */
+  /* If not already in a bordered/backgrounded container like RepomixForm, add some: */
+  background-color: #f8f9fa; /* Similar to RepomixForm background */
+  border-bottom: 1px solid #e0e0e0; /* Separator */
+  margin-bottom: 1rem; /* Space below this section */
+  padding-left: 25px; /* Align with RepomixForm content */
+  padding-right: 25px;
+}
+
+.toggle-system-prompt-button {
+  background-color: #6c757d; /* A neutral grey */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.9em;
+  margin-bottom: 10px; /* Space before the input area appears */
+  transition: background-color 0.2s ease;
+}
+.toggle-system-prompt-button:hover {
+  background-color: #5a6268;
+}
+
+.system-prompt-input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px; /* If toggle button doesn't have margin-bottom */
+}
+
+.system-prompt-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical; /* Allow vertical resizing */
+  min-height: 80px;
+}
+.system-prompt-textarea:disabled {
+  background-color: #eee;
+}
+
+.save-system-prompt-button {
+  background-color: #28a745; /* Green for save */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 15px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.95em;
+  transition: background-color 0.2s ease;
+  align-self: flex-start;
+}
+.save-system-prompt-button:hover:not(:disabled) {
+  background-color: #218838;
+}
+.save-system-prompt-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.system-prompt-status {
+  margin-top: 5px;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+.system-prompt-status.success {
+  background-color: #e6f4ea;
+  color: #137333;
+  border: 1px solid #a8d1b4;
+}
+.system-prompt-status.error {
+  background-color: #fce8e6;
+  color: #c5221f;
+  border: 1px solid #f4aca9;
+}
+
 .app-container {
   display: flex;
   flex-direction: column;

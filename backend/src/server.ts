@@ -10,7 +10,7 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GenerationConfig, Content, FinishReason, SafetyRating } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GenerationConfig, Content, FinishReason, SafetyRating, StartChatParams } from "@google/generative-ai";
 
 const geminiApiKey: string = process.env.GEMINI_API_KEY as string;
 if (!geminiApiKey) {
@@ -26,6 +26,7 @@ const model = genAI.getGenerativeModel({
     // safetySettings, // Apply safety settings if needed
     generationConfig,
 });
+
 
 const app = express();
 const port = 8003; // Use a different port than the React app
@@ -51,6 +52,14 @@ const TEMP_FILENAME_PREFIX = 'temp_repomix_output'; // Keep using temp prefix
 const MAIN_FILENAME_EXTENSION = '.md';
 const SUMMARY_FILENAME_EXTENSION = '.txt';
 const SUMMARY_FILENAME_SUFFIX = '_pack_summary';
+
+const SYSTEM_PROMPT_FILENAME = 'system_prompt.txt';
+const SYSTEM_PROMPT_FULL_PATH = path.join(GENERATED_FILES_DIR, SYSTEM_PROMPT_FILENAME);
+
+// Interface for the save system prompt request body
+interface SaveSystemPromptBody {
+    systemPrompt: string;
+}
 
 // --- Helper Function to generate safe base filename parts from URL ---
 // Returns user/org and repo name, sanitized.
@@ -406,6 +415,7 @@ app.post('/run-repomix', handleRunRepomix);
 interface CallGeminiRequestBody {
     history: Content[]; // Expect history in the correct format
     newMessage: string;
+    systemPrompt?: string;
 }
 
 const handleCallGemini = async ( // Keep async
@@ -414,7 +424,7 @@ const handleCallGemini = async ( // Keep async
     res: Response,
     next: NextFunction
 ): Promise<void> => { // Explicitly declare it returns Promise<void>
-    const { history, newMessage } = req.body;
+    const { history, newMessage, systemPrompt } = req.body;
 
     if (!newMessage) {
         res.status(400).json({ success: false, error: 'newMessage is required.' });
@@ -426,8 +436,20 @@ const handleCallGemini = async ( // Keep async
     }
 
     console.log("Received Gemini request. History length:", history.length, "New message:", newMessage.substring(0, 50) + "...");
+    if (systemPrompt) {
+        console.log("System prompt provided. Length:", systemPrompt.length);
+    }
 
     try {
+        const startChatParams: StartChatParams = { history };
+        if (systemPrompt && systemPrompt.trim().length > 0) {
+            // For newer SDKs, systemInstruction can be a simple string
+            startChatParams.systemInstruction = systemPrompt;
+             // Or if it requires a Content object:
+             // startChatParams.systemInstruction = { role: "user", parts: [{ text: systemPrompt }] };
+            console.log("Applying system prompt to chat session.");
+        }
+        
          const chatSession = model.startChat({ history });
          const result = await chatSession.sendMessage(newMessage);
          const response = result.response;
@@ -470,6 +492,52 @@ const handleCallGemini = async ( // Keep async
     // The async function implicitly returns Promise<void> if all paths either
     // return void, don't return anything (implicitly void), or throw/call next().
 };
+
+// --- Endpoint: /load-system-prompt ---
+app.get('/load-system-prompt', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    console.log(`Request received for /load-system-prompt`);
+    try {
+        if (fs.existsSync(SYSTEM_PROMPT_FULL_PATH)) {
+            const promptContent = await fs.promises.readFile(SYSTEM_PROMPT_FULL_PATH, 'utf-8');
+            console.log(`System prompt loaded. Length: ${promptContent.length}`);
+            res.status(200).json({ success: true, systemPrompt: promptContent });
+            // No explicit return needed; promise resolves to void implicitly.
+        } else {
+            console.log(`System prompt file not found, returning empty.`);
+            res.status(200).json({ success: true, systemPrompt: '' });
+        }
+    } catch (error: any) {
+        console.error("Error loading system prompt:", error);
+        // It's often better to call next(error) if you have a general error handler
+        res.status(500).json({ success: false, error: "Could not load system prompt." });
+    }
+});
+
+// --- Endpoint: /save-system-prompt ---
+app.post('/save-system-prompt', async (
+    req: Request<{}, {}, SaveSystemPromptBody>,
+    res: Response,
+    next: NextFunction
+): Promise<void> => { // Explicitly Promise<void>
+    const { systemPrompt } = req.body;
+    console.log(`Request received for /save-system-prompt. Length: ${systemPrompt?.length}`);
+
+    if (typeof systemPrompt !== 'string') {
+        res.status(400).json({ success: false, error: 'systemPrompt (string) is required in the body.' });
+        return; // CORRECTED: Separate return
+    }
+    try {
+        await fs.promises.writeFile(SYSTEM_PROMPT_FULL_PATH, systemPrompt, 'utf-8');
+        console.log(`System prompt saved to ${SYSTEM_PROMPT_FULL_PATH}`);
+        res.status(200).json({ success: true, message: 'System prompt saved.' });
+        // No explicit return needed here.
+    } catch (error: any) {
+        console.error("Error saving system prompt:", error);
+        res.status(500).json({ success: false, error: 'Could not save system prompt.' });
+        // No explicit return needed here if it's the last statement in the catch.
+        // Or, 'return;' can be added for explicit clarity.
+    }
+});
 
 // Use the async handler constant
 app.post('/call-gemini', handleCallGemini);
