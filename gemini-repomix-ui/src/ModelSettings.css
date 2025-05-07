@@ -1,0 +1,80 @@
+/* gemini-repomix-ui/src/ModelSettings.css */
+.model-settings-container {
+    padding: 15px 25px;
+    border-bottom: 1px solid #e0e0e0;
+    background-color: #f8f9fa; /* Match other control panels */
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.model-settings-container h3 {
+    margin-top: 0;
+    margin-bottom: 5px; /* Reduced margin */
+    color: #333;
+    font-weight: 500;
+    font-size: 1.1em;
+}
+
+.model-selector-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.model-selector-group label {
+    font-size: 0.9em;
+    color: #5f6368;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.model-selector-group select {
+    flex-grow: 1;
+    padding: 8px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background-color: #fff;
+    cursor: pointer;
+}
+
+.model-selector-group select:disabled {
+    background-color: #eee;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.model-notes {
+    font-size: 0.8em;
+    color: #6c757d;
+    margin-top: 2px;
+    padding-left: calc(60px + 10px); /* Align with select, approx label width + gap */
+}
+
+
+.stats-display {
+    font-size: 0.85em;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    gap: 5px; /* Space between stat lines */
+}
+
+.stats-display .stat-line {
+    display: flex;
+    justify-content: space-between; /* Align label and value */
+}
+.stats-display .stat-line span:first-child {
+    font-weight: 500;
+    color: #5f6368;
+}
+.stats-display .stat-line span:last-child {
+    text-align: right;
+}
+
+.stats-display .total-cost {
+    font-weight: bold;
+    color: #137333; /* Green for cost */
+}
