@@ -1,22 +1,29 @@
 // gemini-repomix-ui/src/App.tsx
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react'; // Removed useRef where hook manages it
 import ChatInterface from './ChatInterface';
 import InputArea from './InputArea';
 import RepomixForm from './RepomixForm';
-import RepoSelector, { RepoInfo } from './RepoSelector';
+import RepoSelector /*, { RepoInfo } // RepoInfo now internal to useRepomix hook or api.ts */ from './RepoSelector';
 import FileTree from './FileTree';
 import FileContentDisplay from './FileContentDisplay';
-import { parseRepomixFile, ParsedRepomixData } from './utils/parseRepomix';
-import ModelSettings, { ClientGeminiModelInfo, TokenStats } from './ModelSettings';
+// import { parseRepomixFile, ParsedRepomixData } from './utils/parseRepomix'; // ParsedRepomixData still needed
+import ModelSettings /*, { ClientGeminiModelInfo, TokenStats } // Types now internal to useModels or api.ts */ from './ModelSettings';
 import './App.css';
 
-export interface ChatMessage {
+// Import custom hooks
+import { useSystemPrompt } from './hooks/useSystemPrompt';
+import { useModels } from './hooks/useModels';
+import { useRepomix } from './hooks/useRepomix';
+
+// Import API service and types
+import * as api from './services/api'; // Import all as api
+//import type { GeminiApiResponse } from './services/api'; // Explicitly import if needed for type casting
+//import type { ParsedRepomixData } from './utils/parseRepomix'; // Keep if used for prop types
+
+export interface ChatMessage { // Keep this if it's fundamental to App's role as orchestrator
   role: "user" | "model";
   parts: [{ text: string }];
 }
-
-const prefix = import.meta.env.DEV ? '' : '/repochat';
-console.log(`API Prefix set to: '${prefix}' (Mode: ${import.meta.env.MODE})`);
 
 interface ComparisonViewData {
     filePath: string;
@@ -24,595 +31,368 @@ interface ComparisonViewData {
     suggestedContent: string;
 }
 
-interface GeminiApiResponse {
-    success: boolean;
-    text?: string;
-    error?: string;
-    inputTokens?: number;
-    outputTokens?: number;
-    inputCost?: number;
-    outputCost?: number;
-    totalCost?: number;
-    modelUsed?: string;
-}
-
 const MAX_HISTORY_TURNS = 10;
 
 function App() {
-  const [repoUrl, setRepoUrl] = useState('');
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [attachedFileContent, setAttachedFileContent] = useState<string | null>(null);
-  const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
+    // --- UI State ---
+    const [comparisonView, setComparisonView] = useState<ComparisonViewData | null>(null);
+    const [isFullScreenView, setIsFullScreenView] = useState(false);
+    const [chatIsLoading, setChatIsLoading] = useState(false); // Chat specific loading
+    const [chatError, setChatError] = useState<string | null>(null); // Chat specific error
 
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generationMessage, setGenerationMessage] = useState<string | null>(null);
-  const [generationError, setGenerationError] = useState<string | null>(null);
+    // --- Custom Hooks ---
+    const {
+        systemPrompt,
+        setSystemPrompt,
+        showSystemPromptInput,
+        setShowSystemPromptInput,
+        isSystemPromptSaving,
+        systemPromptMessage,
+        handleSaveSystemPrompt,
+    } = useSystemPrompt();
 
-  const [availableRepos, setAvailableRepos] = useState<RepoInfo[]>([]);
-  const [isLoadingRepos, setIsLoadingRepos] = useState(false);
-  const [repoListError, setRepoListError] = useState<string | null>(null);
-  const [selectedRepoFile, setSelectedRepoFile] = useState<string>("");
-  const [isLoadingFileContent, setIsLoadingFileContent] = useState(false);
-  const [attachmentStatus, setAttachmentStatus] = useState<string | null>(null);
-  const attachmentStatusTimer = useRef<number | null>(null);
+    const {
+        availableModels,
+        selectedModelCallName,
+        isLoadingModels,
+        modelError,
+        handleModelChange,
+        currentCallStats,
+        totalSessionStats,
+        recordCallStats,
+        resetCurrentCallStats,
+    } = useModels("gemini-2.5-pro-preview-05-06" /* Default model if needed */);
 
-  const [parsedRepomixData, setParsedRepomixData] = useState<ParsedRepomixData | null>(null);
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
-  const [selectedFileContent, setSelectedFileContent] = useState<string | null>(null);
-  const [isLoadingSelectedFile, setIsLoadingSelectedFile] = useState(false);
+    const {
+        repoUrl,
+        onRepoUrlChange,
+        // includePatterns, // Defaulted in hook for now
+        // excludePatterns, // Defaulted in hook for now
+        handleGenerateRepomixFile,
+        isGenerating, // Renamed from repomixIsGenerating for clarity
+        generationMessage,
+        generationError,
+        availableRepos,
+        isLoadingRepos,
+        repoListError,
+        selectedRepoFile,
+        loadRepoFileContent,
+        isLoadingFileContent,
+        fileContentError, // Error specific to loading .md content
+        handleManualFileAttach,
+        attachedFileName, // This is the name of the .md or manually uploaded file
+        parsedRepomixData,
+        selectedFilePathForView,
+        selectedFileContentForView,
+        isLoadingSelectedFileForView,
+        handleSelectFileForViewing,
+        promptSelectedFilePaths,
+        handleTogglePromptSelectedFile,
+        handleSelectAllPromptFiles,
+        handleDeselectAllPromptFiles,
+        allFilePathsInCurrentRepomix,
+        attachmentStatus
+    } = useRepomix();
 
-  const [systemPrompt, setSystemPrompt] = useState<string>('');
-  const [showSystemPromptInput, setShowSystemPromptInput] = useState<boolean>(false);
-  const [isSystemPromptSaving, setIsSystemPromptSaving] = useState<boolean>(false);
-  const [systemPromptMessage, setSystemPromptMessage] = useState<string | null>(null);
-  const systemPromptMessageTimer = useRef<number | null>(null);
+    const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
-  const [comparisonView, setComparisonView] = useState<ComparisonViewData | null>(null);
-  const [isFullScreenView, setIsFullScreenView] = useState(false);
+    // --- Effects for UI state based on hook states ---
+    useEffect(() => {
+        if (!parsedRepomixData && !comparisonView) {
+            setIsFullScreenView(false);
+        }
+    }, [parsedRepomixData, comparisonView]);
+    
+    // --- Combined Error Display (example) ---
+    // You might want more granular error displays, but this shows combining them
+    const globalError = modelError || repoListError || fileContentError || chatError || generationError;
 
-  const [promptSelectedFilePaths, setPromptSelectedFilePaths] = useState<string[]>([]);
-  const [availableModels, setAvailableModels] = useState<ClientGeminiModelInfo[]>([]);
-  const [selectedModelCallName, setSelectedModelCallName] = useState<string>('');
-  const [isLoadingModels, setIsLoadingModels] = useState<boolean>(true);
-  const [currentCallStats, setCurrentCallStats] = useState<TokenStats | null>(null);
-  const [totalSessionStats, setTotalSessionStats] = useState<TokenStats>({
-      inputTokens: 0, outputTokens: 0, totalTokens: 0,
-      inputCost: 0, outputCost: 0, totalCost: 0,
-  });
 
-  useEffect(() => {
-    const fetchSystemPrompt = async () => {
-        try {
-            const response = await fetch(`${prefix}/api/load-system-prompt`);
-            const result = await response.json();
-            if (result.success && typeof result.systemPrompt === 'string') {
-                setSystemPrompt(result.systemPrompt);
-            } else {
-                setSystemPrompt('');
-            }
-        } catch (err: any) {
-            setSystemPrompt('');
+    // --- Event Handlers that orchestrate between hooks/UI ---
+    const toggleFullScreenView = () => {
+        if (parsedRepomixData || comparisonView) {
+            setIsFullScreenView(prev => !prev);
+        } else {
+            setIsFullScreenView(false); // Should not be possible if button not shown
         }
     };
-    fetchSystemPrompt();
-  }, []);
 
-  const fetchGeminiConfig = useCallback(async () => {
-    setIsLoadingModels(true);
-    setError(null);
-    try {
-        const response = await fetch(`${prefix}/api/gemini-config`);
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-            throw new Error(result.error || `HTTP error ${response.status} fetching Gemini config`);
-        }
-        setAvailableModels(result.models || []);
-        if (result.currentModelCallName) {
-            setSelectedModelCallName(result.currentModelCallName);
-        } else if (result.models && result.models.length > 0) {
-            setSelectedModelCallName(result.models[0].callName);
-        }
-    } catch (err: any) {
-        console.error("Failed to fetch Gemini config:", err);
-        setError("Could not load AI model configurations. Please check the backend. " + err.message);
-        setAvailableModels([]);
-    } finally {
-        setIsLoadingModels(false);
-    }
-  }, []);
-
-  const handleSaveSystemPrompt = useCallback(async () => {
-    setIsSystemPromptSaving(true);
-    setSystemPromptMessage(null);
-    if (systemPromptMessageTimer.current) clearTimeout(systemPromptMessageTimer.current);
-    try {
-        const response = await fetch(`${prefix}/api/save-system-prompt`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ systemPrompt }),
-        });
-        const result = await response.json();
-        if (!response.ok || !result.success) {
-            throw new Error(result.error || 'Failed to save system prompt.');
-        }
-        setSystemPromptMessage('System prompt (file) saved successfully!');
-    } catch (err: any) {
-        setSystemPromptMessage(`Error saving system prompt (file): ${err.message}`);
-    } finally {
-        setIsSystemPromptSaving(false);
-        systemPromptMessageTimer.current = setTimeout(() => setSystemPromptMessage(null), 3000);
-    }
-  }, [systemPrompt]);
-
-  const toggleFullScreenView = () => {
-    if (parsedRepomixData || comparisonView) {
-        setIsFullScreenView(prev => !prev);
-    } else {
-        setIsFullScreenView(false);
-    }
-  };
-
-  const clearAttachmentStatus = useCallback(() => {
-      if (attachmentStatusTimer.current) {
-        clearTimeout(attachmentStatusTimer.current);
-        attachmentStatusTimer.current = null;
-      }
-      setAttachmentStatus(null);
-  }, []);
-
-  const fetchAvailableRepos = useCallback(async () => {
-      setIsLoadingRepos(true);
-      setRepoListError(null);
-      try {
-          const response = await fetch(`${prefix}/api/list-generated-files`);
-          const result = await response.json();
-          if (!response.ok || !result.success) {
-              throw new Error(result.error || `HTTP error ${response.status}`);
-          }
-          setAvailableRepos(result.data || []);
-      } catch (err: any) {
-          setRepoListError(err.message || "Could not load repo list.");
-          setAvailableRepos([]);
-      } finally {
-          setIsLoadingRepos(false);
-      }
-  }, []);
-
-  useEffect(() => {
-      fetchAvailableRepos();
-      fetchGeminiConfig();
-  }, [fetchAvailableRepos, fetchGeminiConfig]);
-
-  const clearFileData = useCallback(() => {
-    setAttachedFileContent(null);
-    setAttachedFileName(null);
-    setParsedRepomixData(null);
-    setSelectedFilePath(null);
-    setPromptSelectedFilePaths([]);
-    setSelectedFileContent(null);
-    if (!comparisonView) setIsFullScreenView(false);
-  }, [comparisonView]);
-
-  useEffect(() => {
-    if (!parsedRepomixData && !comparisonView) {
-        setIsFullScreenView(false);
-    }
-  }, [parsedRepomixData, comparisonView]);
-
-  const handleSelectFile = useCallback((filePath: string) => {
-      if (!parsedRepomixData) return;
-      if (comparisonView) setComparisonView(null);
-      setIsLoadingSelectedFile(true);
-      setSelectedFilePath(filePath);
-      setTimeout(() => {
-          const content = parsedRepomixData.fileContents[filePath];
-          setSelectedFileContent(content !== undefined ? content : `// Error: Content not found`);
-          setIsLoadingSelectedFile(false);
-      }, 50);
-  }, [parsedRepomixData, comparisonView]);
-
-  // Helper function to get all valid file paths from parsed data
-  const getAllFilePathsFromParsedData = (data: ParsedRepomixData | null): string[] => {
-    if (!data || !data.directoryStructure || !data.fileContents) return [];
-    return data.directoryStructure.filter(p => data.fileContents.hasOwnProperty(p) && !p.endsWith('/'));
-  };
-
-  const loadRepoFileContent = useCallback(async (filename: string): Promise<boolean> => {
-    if (!filename) {
-        clearFileData();
-        setSelectedRepoFile("");
-        clearAttachmentStatus();
-        return false;
-    }
-    setIsLoadingFileContent(true);
-    setError(null);
-    setRepoListError(null);
-    clearFileData(); // This will clear promptSelectedFilePaths
-    setSelectedRepoFile(filename);
-    clearAttachmentStatus();
-    setAttachmentStatus(`Attaching ${filename}...`);
-    const selectedRepoInfo = availableRepos.find(repo => repo.filename === filename);
-    if (selectedRepoInfo?.repoIdentifier) setRepoUrl(`https://github.com/${selectedRepoInfo.repoIdentifier}`);
-
-    try {
-        const response = await fetch(`${prefix}/api/get-file-content/${encodeURIComponent(filename)}`);
-        const result = await response.json();
-        if (!response.ok || !result.success) throw new Error(result.error || `HTTP error ${response.status}`);
-        
-        setAttachedFileContent(result.content);
-        setAttachedFileName(filename);
-        const parsedData = parseRepomixFile(result.content);
-
-        if (parsedData) {
-            setParsedRepomixData(parsedData);
-            setAttachmentStatus(`Attached & Parsed ${filename} successfully.`);
-            // *** CHANGE: Select all files by default ***
-            setPromptSelectedFilePaths(getAllFilePathsFromParsedData(parsedData));
+    const handleStartComparison = (filePath: string, suggestedContent: string) => {
+        if (parsedRepomixData?.fileContents[filePath]) {
+            setComparisonView({ filePath, originalContent: parsedRepomixData.fileContents[filePath], suggestedContent });
+            // handleSelectFileForViewing(null); // Clear single file view if any
+            setIsFullScreenView(true);
         } else {
-            setParsedRepomixData(null); // Ensure it's null if parsing fails
-            setAttachmentStatus(`Attached ${filename} (non-standard format?).`);
-            setPromptSelectedFilePaths([]); // Clear if no parsed data
+            setChatError(`Original content for ${filePath} not found for comparison.`); // Use chat error for now
         }
-        attachmentStatusTimer.current = setTimeout(clearAttachmentStatus, 3000);
-        return true;
-    } catch (err: any) {
-        setError(`Failed to load content for ${filename}: ${err.message}`);
-        clearFileData(); // This will clear promptSelectedFilePaths
-        setSelectedRepoFile("");
-        setAttachmentStatus(`Failed to attach ${filename}.`);
-        attachmentStatusTimer.current = setTimeout(clearAttachmentStatus, 5000);
-        return false;
-    } finally {
-        setIsLoadingFileContent(false);
-    }
-  }, [clearFileData, availableRepos, clearAttachmentStatus]);
+    };
+    const handleCloseComparison = () => {
+        setComparisonView(null);
+        // Decide if you want to clear selectedFilePathForView or restore it
+    };
 
-  const handleFileAttach = useCallback((file: File) => {
-      setIsLoading(true);
-      setError(null);
-      setGenerationMessage(null);
-      setGenerationError(null);
-      clearAttachmentStatus();
-      clearFileData(); // This will clear promptSelectedFilePaths
-      setSelectedRepoFile("");
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          const content = event.target?.result as string;
-          setAttachedFileContent(content);
-          setAttachedFileName(file.name);
-          const parsedData = parseRepomixFile(content);
-          setParsedRepomixData(parsedData); // Set parsed data first
-          setIsLoading(false);
-          // *** CHANGE: Select all files by default ***
-          if (parsedData) {
-            setPromptSelectedFilePaths(getAllFilePathsFromParsedData(parsedData));
-          } else {
-            setPromptSelectedFilePaths([]); // Clear if no parsed data
-          }
-      };
-      reader.onerror = (err) => {
-          setError(`Error reading file: ${err}`);
-          clearFileData(); // This will clear promptSelectedFilePaths
-          setIsLoading(false);
-      };
-      reader.readAsText(file);
-  }, [clearFileData, clearAttachmentStatus ]);
+    const handlePromptSubmit = useCallback(async (prompt: string) => {
+        if (!prompt && !parsedRepomixData && promptSelectedFilePaths.length === 0) {
+            setChatError("Please type a prompt, attach a file, or select files from the tree.");
+            return;
+        }
+        setChatIsLoading(true);
+        setChatError(null);
+        // clearAttachmentStatus(); // Managed by useRepomix if needed
+        resetCurrentCallStats();
 
-  const handleGenerateDescription = useCallback(async (
-    generateRepoUrl: string, includePatterns: string, excludePatterns: string
-  ) => {
-    setIsGenerating(true);
-    setGenerationMessage(null);
-    setGenerationError(null);
-    clearFileData(); // This will clear promptSelectedFilePaths
-    clearAttachmentStatus();
-    setSelectedRepoFile("");
-    try {
-      const response = await fetch(`${prefix}/api/run-repomix`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ repoUrl: generateRepoUrl, includePatterns: includePatterns || undefined, excludePatterns: excludePatterns || undefined }),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.error || `HTTP error ${response.status}`);
-      const outputFilename = result.outputFilename;
-      if (outputFilename) {
-        setGenerationMessage(`Success! Generated: ${outputFilename}. Loading...`);
-        await fetchAvailableRepos();
-        setTimeout(async () => {
-            // loadRepoFileContent will now handle setting promptSelectedFilePaths by default
-            const loaded = await loadRepoFileContent(outputFilename);
-            if (loaded) {
-                setGenerationMessage(`Generated & Loaded: ${outputFilename}`);
-                setSelectedRepoFile(outputFilename);
+        let filesToIncludeInPromptSegment = "";
+        if (promptSelectedFilePaths.length > 0 && parsedRepomixData) {
+            let selectedFilesContentParts: string[] = [];
+            promptSelectedFilePaths.forEach(path => {
+                const content = parsedRepomixData.fileContents[path];
+                if (content) {
+                    selectedFilesContentParts.push(`<file path="${path}">\n${content}\n</file>`);
+                }
+            });
+            if (selectedFilesContentParts.length > 0) {
+                filesToIncludeInPromptSegment = `<selected_repository_files>\n${selectedFilesContentParts.join('\n')}\n</selected_repository_files>`;
+            }
+        }
+
+        // Determine the base content for the prompt (either selected files or the whole attached .md content)
+        // The `attachedFileContent` from `useRepomix` is the *entire* .md file.
+        // We prioritize `filesToIncludeInPromptSegment` if specific files are chosen.
+        let contextContent = "";
+        let contextDescriptor = "";
+
+        if (filesToIncludeInPromptSegment) {
+            contextContent = filesToIncludeInPromptSegment;
+            contextDescriptor = `(Using ${promptSelectedFilePaths.length} selected files)`;
+        } else if (parsedRepomixData) { // If parsedData exists but no specific files selected, imply using the whole thing
+            // This case needs careful thought: do we send the whole `attachedFileContent` (the .md file)
+            // or imply its context without re-sending?
+            // For now, let's assume if parsedData is there and no files selected, no *explicit* file content is sent,
+            // relying on the model to remember previous context if Repomix file was just loaded.
+            // This behavior might need adjustment based on desired UX.
+            // If you *always* want to send the full .md content if no sub-files are selected, uncomment below.
+            /*
+            if (attachedFileContent) { // `attachedFileContent` is the content of the .md file
+                contextContent = `Attached File Content (${attachedFileName || 'full_description.md'}):\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
+                contextDescriptor = `(Using attached file: ${attachedFileName})`;
+            }
+            */
+             contextDescriptor = attachedFileName ? `(Context: ${attachedFileName})` : "(General context)";
+
+        } else if (attachedFileName) { // Manually attached file, not parsed by Repomix
+             // This case might be redundant if `handleManualFileAttach` sets `parsedRepomixData` to a basic structure
+             // For now, let's assume this implies a non-Repomix text file.
+            // We'd need the actual content of this manually attached file.
+            // `useRepomix` doesn't expose `attachedFileContent` directly, it uses it to produce `parsedRepomixData`.
+            // This part of logic needs review based on how `handleManualFileAttach` interacts with `parsedRepomixData`.
+            // Let's assume for now, if `parsedRepomixData` is null but `attachedFileName` exists, it was a non-parsable file.
+            // We probably shouldn't send its content automatically unless explicitly told.
+            contextDescriptor = `(Regarding file: ${attachedFileName})`;
+        }
+
+
+        let combinedPromptForApi = "";
+        if (contextContent) { // Only add if we have specific file segments
+            combinedPromptForApi += `Context from selected repository files:\n${contextContent}\n\n`;
+        }
+        combinedPromptForApi += prompt ? `User Prompt: ${prompt}` : (contextDescriptor ? `User Prompt: Please analyze the ${contextDescriptor}.` : `User Prompt: Please analyze.`);
+
+
+        const userDisplayPrompt = prompt || contextDescriptor || "Analyze request";
+        const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userDisplayPrompt }] };
+
+        const historyForBackend: ChatMessage[] = chatHistory
+            .slice(-MAX_HISTORY_TURNS * 2) // Ensure we don't send too much history
+            .map(msg => ({ role: msg.role, parts: msg.parts }));
+
+        setChatHistory(prev => [...prev, newUserMessage]);
+
+        const result = await api.callGemini({
+            history: historyForBackend,
+            newMessage: combinedPromptForApi,
+            systemPrompt: systemPrompt, // From useSystemPrompt
+            modelCallName: selectedModelCallName, // From useModels
+        });
+
+        if (result.success && result.text) {
+            const newModelMessage: ChatMessage = { role: 'model', parts: [{ text: result.text }] };
+            setChatHistory(prev => [...prev, newModelMessage]);
+
+            if (result.inputTokens !== undefined && result.outputTokens !== undefined && result.totalCost !== undefined) {
+                recordCallStats({ // From useModels
+                    inputTokens: result.inputTokens,
+                    outputTokens: result.outputTokens,
+                    totalTokens: (result.inputTokens || 0) + (result.outputTokens || 0),
+                    inputCost: result.inputCost || 0,
+                    outputCost: result.outputCost || 0,
+                    totalCost: result.totalCost || 0,
+                    modelUsed: result.modelUsed || selectedModelCallName,
+                });
+            }
+        } else {
+            setChatError(`Error: ${result.error || "Gemini API call failed."}`);
+            setChatHistory(prev => prev.slice(0, -1)); // Remove the optimistic user message
+        }
+        setChatIsLoading(false);
+
+    }, [
+        chatHistory, systemPrompt, selectedModelCallName, recordCallStats, resetCurrentCallStats,
+        parsedRepomixData, promptSelectedFilePaths, attachedFileName // From useRepomix
+    ]);
+
+
+    // --- Derived State for UI ---
+    const displayAttachedFileNameForInputArea = useMemo(() => {
+        if (promptSelectedFilePaths.length > 0) {
+            const allFilesCount = allFilePathsInCurrentRepomix.length;
+            if (allFilesCount > 0 && promptSelectedFilePaths.length === allFilesCount) {
+                 return `All ${allFilesCount} file(s) selected for prompt`;
             } else {
-                setGenerationError(`Generated ${outputFilename}, but failed to load/parse.`);
-                setGenerationMessage(null);
+                 return `${promptSelectedFilePaths.length} file(s) selected for prompt`;
             }
-        }, 50); // Timeout to allow UI to update and fetchAvailableRepos to potentially finish
-      } else {
-         setGenerationError("Repomix finished, but no output filename returned.");
-         setGenerationMessage(null);
-      }
-    } catch (err: any) {
-        setGenerationError(err.message || "Failed to run or load Repomix output.");
-        setGenerationMessage(null);
-    } finally {
-        setIsGenerating(false);
-    }
-  }, [clearFileData, fetchAvailableRepos, loadRepoFileContent, clearAttachmentStatus]);
+        }
+        return attachedFileName; // This is the name of the .md file or manually uploaded one
+    }, [promptSelectedFilePaths, allFilePathsInCurrentRepomix, attachedFileName]);
 
-  const handleStartComparison = (filePath: string, suggestedContent: string) => {
-    if (parsedRepomixData?.fileContents[filePath]) {
-        setComparisonView({ filePath, originalContent: parsedRepomixData.fileContents[filePath], suggestedContent });
-        setSelectedFilePath(null);
-        setIsFullScreenView(true);
-    } else {
-        setError(`Original content for ${filePath} not found.`);
-    }
-  };
+    const anyLoading = chatIsLoading || isGenerating || isLoadingFileContent || isLoadingModels || isLoadingSelectedFileForView || isLoadingRepos || isSystemPromptSaving;
 
-  const handleCloseComparison = () => setComparisonView(null);
+    return (
+        <div className={`app-container ${isFullScreenView ? 'full-screen-file-view' : ''}`}>
+            <header className="app-header">
+                <h1>Gemini Repomix Assistant</h1>
+                {(parsedRepomixData || comparisonView) && (
+                    <button
+                        onClick={toggleFullScreenView}
+                        className="fullscreen-toggle-button"
+                        title={isFullScreenView ? "Exit Full Screen View" : "Expand File View"}
+                    >
+                        {isFullScreenView ? '📰 Collapse' : '↔️ Expand'}
+                    </button>
+                )}
+            </header>
 
-  const handlePromptSubmit = useCallback(async (prompt: string) => {
-      if (!prompt && !attachedFileContent && promptSelectedFilePaths.length === 0) {
-          setError("Please type a prompt, attach a file, or select files from the tree.");
-          return;
-      }
-      setIsLoading(true);
-      setError(null);
-      setGenerationMessage(null);
-      setGenerationError(null);
-      clearAttachmentStatus();
-      setCurrentCallStats(null);
+            <div className={`main-content-wrapper ${isFullScreenView ? 'full-screen-active' : ''}`}>
+                {parsedRepomixData && isFullScreenView && !comparisonView && (
+                    <FileTree
+                        structure={parsedRepomixData.directoryStructure}
+                        selectedFilePath={selectedFilePathForView}
+                        onSelectFile={handleSelectFileForViewing}
+                        promptSelectedFilePaths={promptSelectedFilePaths}
+                        onTogglePromptSelectedFile={handleTogglePromptSelectedFile}
+                        onSelectAllPromptFiles={handleSelectAllPromptFiles}
+                        onDeselectAllPromptFiles={handleDeselectAllPromptFiles}
+                    />
+                )}
 
-      let filesToIncludeInPromptSegment = "";
-      if (promptSelectedFilePaths.length > 0 && parsedRepomixData) {
-          let selectedFilesContentParts: string[] = [];
-          promptSelectedFilePaths.forEach(path => {
-              const content = parsedRepomixData.fileContents[path];
-              if (content) {
-                  selectedFilesContentParts.push(`<file path="${path}">\n${content}\n</file>`);
-              }
-          });
-          if (selectedFilesContentParts.length > 0) {
-              filesToIncludeInPromptSegment = `<selected_repository_files>\n${selectedFilesContentParts.join('\n')}\n</selected_repository_files>`;
-          }
-      }
-
-      let combinedPrompt = "";
-      if (filesToIncludeInPromptSegment) {
-          combinedPrompt += `Context from selected repository files:\n${filesToIncludeInPromptSegment}\n\n`;
-      } else if (attachedFileContent) {
-          combinedPrompt += `Attached File Content (${attachedFileName || 'full_description.md'}):\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
-      }
-      combinedPrompt += prompt ? `User Prompt: ${prompt}` : `User Prompt: Please analyze the attached content.`;
-
-      const userDisplayPrompt = prompt || (promptSelectedFilePaths.length > 0 ? `(Using ${promptSelectedFilePaths.length} selected files)` : `(Using attached file: ${attachedFileName})`);
-      const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userDisplayPrompt }] };
-
-      const historyForBackend: ChatMessage[] = chatHistory
-          .slice(-MAX_HISTORY_TURNS * 2)
-          .map(msg => ({ role: msg.role, parts: msg.parts }));
-
-      setChatHistory(prev => [...prev, newUserMessage]);
-
-      try {
-          const response = await fetch(`${prefix}/api/call-gemini`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    history: historyForBackend,
-                    newMessage: combinedPrompt,
-                    systemPrompt: systemPrompt,
-                    modelCallName: selectedModelCallName,
-                }),
-          });
-          const result: GeminiApiResponse = await response.json();
-
-          if (!response.ok || !result.success) {
-              throw new Error(result.error || `API proxy error ${response.status}`);
-          }
-          const newModelMessage: ChatMessage = { role: 'model', parts: [{ text: result.text || "No text content received." }] };
-          setChatHistory(prev => [...prev, newModelMessage]);
-
-          if (result.inputTokens !== undefined && result.outputTokens !== undefined && result.totalCost !== undefined) {
-            const callStatsUpdate: TokenStats = {
-                inputTokens: result.inputTokens,
-                outputTokens: result.outputTokens,
-                totalTokens: (result.inputTokens || 0) + (result.outputTokens || 0),
-                inputCost: result.inputCost || 0,
-                outputCost: result.outputCost || 0,
-                totalCost: result.totalCost || 0,
-                modelUsed: result.modelUsed || selectedModelCallName,
-            };
-            setCurrentCallStats(callStatsUpdate);
-            setTotalSessionStats(prev => ({
-                inputTokens: prev.inputTokens + callStatsUpdate.inputTokens,
-                outputTokens: prev.outputTokens + callStatsUpdate.outputTokens,
-                totalTokens: prev.totalTokens + callStatsUpdate.totalTokens,
-                inputCost: prev.inputCost + callStatsUpdate.inputCost,
-                outputCost: prev.outputCost + callStatsUpdate.outputCost,
-                totalCost: prev.totalCost + callStatsUpdate.totalCost,
-                modelUsed: prev.modelUsed
-            }));
-            if (result.modelUsed && result.modelUsed !== selectedModelCallName) {
-                setSelectedModelCallName(result.modelUsed);
-            }
-          }
-      } catch (apiError: any) {
-          setError(`Error: ${apiError.message}`);
-          setChatHistory(prev => prev.slice(0, -1));
-      } finally {
-          setIsLoading(false);
-      }
-  }, [chatHistory, attachedFileContent, attachedFileName, clearAttachmentStatus, systemPrompt, selectedModelCallName, promptSelectedFilePaths, parsedRepomixData]);
-
-  const handleModelChange = (newModelCallName: string) => {
-    setSelectedModelCallName(newModelCallName);
-  };
-
-  const handleTogglePromptSelectedFile = useCallback((filePath: string) => {
-    setPromptSelectedFilePaths(prev =>
-        prev.includes(filePath) ? prev.filter(p => p !== filePath) : [...prev, filePath]
-    );
-  }, []);
-  
-  // This useMemo correctly identifies all selectable files based on current parsedRepomixData
-  const allFilePathsInCurrentRepomix = useMemo(() => getAllFilePathsFromParsedData(parsedRepomixData), [parsedRepomixData]);
-
-  const handleSelectAllPromptFiles = useCallback(() => {
-      setPromptSelectedFilePaths([...allFilePathsInCurrentRepomix]);
-  }, [allFilePathsInCurrentRepomix]);
-
-  const handleDeselectAllPromptFiles = useCallback(() => {
-      setPromptSelectedFilePaths([]);
-  }, []);
-
-  return (
-    <div className={`app-container ${isFullScreenView ? 'full-screen-file-view' : ''}`}>
-        <header className="app-header">
-            <h1>Gemini Repomix Assistant</h1>
-            {(parsedRepomixData || comparisonView) && (
-                <button
-                  onClick={toggleFullScreenView}
-                  className="fullscreen-toggle-button"
-                  title={isFullScreenView ? "Exit Full Screen View" : "Expand File View"}
-                >
-                  {isFullScreenView ? '📰 Collapse' : '↔️ Expand'}
-                </button>
-            )}
-        </header>
-
-        <div className={`main-content-wrapper ${isFullScreenView ? 'full-screen-active' : ''}`}>
-            {parsedRepomixData && isFullScreenView && !comparisonView && (
-                <FileTree
-                    structure={parsedRepomixData.directoryStructure}
-                    selectedFilePath={selectedFilePath}
-                    onSelectFile={handleSelectFile}
-                    promptSelectedFilePaths={promptSelectedFilePaths}
-                    onTogglePromptSelectedFile={handleTogglePromptSelectedFile}
-                    onSelectAllPromptFiles={handleSelectAllPromptFiles}
-                    onDeselectAllPromptFiles={handleDeselectAllPromptFiles}
-                />
-            )}
-
-            <div className="center-column">
-                <div className="scrollable-content-area">
-                    <div className="top-controls-row">
-                        <div className="top-controls-left">
-                            <RepomixForm
-                                repoUrl={repoUrl}
-                                onRepoUrlChange={setRepoUrl}
-                                onGenerate={handleGenerateDescription}
-                                isGenerating={isGenerating}
-                                generationMessage={generationMessage}
-                                generationError={generationError}
-                            />
-                            <RepoSelector
-                                repos={availableRepos}
-                                onSelectRepo={loadRepoFileContent}
-                                isLoading={isLoadingRepos || isLoadingFileContent}
-                                selectedValue={selectedRepoFile}
-                            />
-                            <div className="system-prompt-settings-group">
-                                <button
-                                    onClick={() => setShowSystemPromptInput(prev => !prev)}
-                                    className="toggle-system-prompt-button"
-                                    title={showSystemPromptInput ? "Hide System Prompt Editor" : "Edit File-Based System Prompt"}
-                                >
-                                    {showSystemPromptInput ? 'Hide' : 'Set'} System Prompt (File)
-                                </button>
-                                {showSystemPromptInput && (
-                                    <div className="system-prompt-input-area">
-                                        <textarea
-                                            value={systemPrompt}
-                                            onChange={(e) => setSystemPrompt(e.target.value)}
-                                            placeholder="Define the assistant's role for the file-based prompt..."
-                                            rows={3}
-                                            className="system-prompt-textarea"
-                                            disabled={isSystemPromptSaving}
-                                        />
-                                        <button
-                                            onClick={handleSaveSystemPrompt}
-                                            disabled={isSystemPromptSaving || !systemPrompt.trim()}
-                                            className="save-system-prompt-button"
-                                        >
-                                            {isSystemPromptSaving ? 'Saving...' : 'Save to File'}
-                                        </button>
-                                        {systemPromptMessage && (
-                                            <p className={`system-prompt-status ${systemPromptMessage.includes('Error') ? 'error' : 'success'}`}>
-                                                {systemPromptMessage}
-                                            </p>
-                                        )}
-                                    </div>
-                                )}
+                <div className="center-column">
+                    <div className="scrollable-content-area">
+                        <div className="top-controls-row">
+                            <div className="top-controls-left">
+                                <RepomixForm
+                                    repoUrl={repoUrl} // from useRepomix
+                                    onRepoUrlChange={onRepoUrlChange} // from useRepomix
+                                    // Pass default include/exclude or manage them in useRepomix if they need to be dynamic
+                                    onGenerate={handleGenerateRepomixFile} // from useRepomix
+                                    isGenerating={isGenerating} // from useRepomix
+                                    generationMessage={generationMessage} // from useRepomix
+                                    generationError={generationError} // from useRepomix
+                                />
+                                <RepoSelector
+                                    repos={availableRepos} // from useRepomix
+                                    onSelectRepo={loadRepoFileContent} // from useRepomix
+                                    isLoading={isLoadingRepos || isLoadingFileContent} // from useRepomix
+                                    selectedValue={selectedRepoFile} // from useRepomix
+                                />
+                                <div className="system-prompt-settings-group">
+                                    <button
+                                        onClick={() => setShowSystemPromptInput(prev => !prev)}
+                                        className="toggle-system-prompt-button"
+                                        disabled={isSystemPromptSaving}
+                                    >
+                                        {showSystemPromptInput ? 'Hide' : 'Set'} System Prompt (File)
+                                    </button>
+                                    {showSystemPromptInput && (
+                                        <div className="system-prompt-input-area">
+                                            <textarea
+                                                value={systemPrompt} // from useSystemPrompt
+                                                onChange={(e) => setSystemPrompt(e.target.value)} // from useSystemPrompt
+                                                rows={3}
+                                                className="system-prompt-textarea"
+                                                disabled={isSystemPromptSaving} // from useSystemPrompt
+                                            />
+                                            <button
+                                                onClick={handleSaveSystemPrompt} // from useSystemPrompt
+                                                disabled={isSystemPromptSaving || !systemPrompt.trim()}
+                                                className="save-system-prompt-button"
+                                            >
+                                                {isSystemPromptSaving ? 'Saving...' : 'Save to File'}
+                                            </button>
+                                            {systemPromptMessage && ( /* from useSystemPrompt */
+                                                <p className={`system-prompt-status ${systemPromptMessage.includes('Error') ? 'error' : 'success'}`}>
+                                                    {systemPromptMessage}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="top-controls-right">
+                                <ModelSettings
+                                    availableModels={availableModels} // from useModels
+                                    selectedModelCallName={selectedModelCallName} // from useModels
+                                    onModelChange={handleModelChange} // from useModels
+                                    isLoadingModels={isLoadingModels} // from useModels
+                                    currentCallStats={currentCallStats} // from useModels
+                                    totalSessionStats={totalSessionStats} // from useModels
+                                    isChatLoading={chatIsLoading} // App specific
+                                />
                             </div>
                         </div>
-                        <div className="top-controls-right">
-                            <ModelSettings
-                                availableModels={availableModels}
-                                selectedModelCallName={selectedModelCallName}
-                                onModelChange={handleModelChange}
-                                isLoadingModels={isLoadingModels}
-                                currentCallStats={currentCallStats}
-                                totalSessionStats={totalSessionStats}
-                                isChatLoading={isLoading}
-                            />
-                        </div>
-                    </div>
-                    {attachmentStatus && (
-                        <div className={`attachment-status ${attachmentStatus.includes('Failed') || attachmentStatus.includes('non-standard') ? 'warning' : 'success'}`}>
-                            {attachmentStatus}
-                        </div>
-                    )}
-                    {repoListError && <div className="error-message repo-error">Failed to load repo list: {repoListError}</div>}
-                    <ChatInterface history={chatHistory} onStartComparison={handleStartComparison} parsedRepomixData={parsedRepomixData}/>
-                    {isLoading && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'user' && (
-                        <div className="loading-indicator">Thinking...</div>
-                    )}
-                    {error && <div className="error-message chat-error">{error}</div>}
-                </div>
-                {(() => {
-                    let displayAttachedFileName: string | null = attachedFileName;
-                    if (promptSelectedFilePaths.length > 0) {
-                        const allFilesCount = allFilePathsInCurrentRepomix.length;
-                        if (allFilesCount > 0 && promptSelectedFilePaths.length === allFilesCount) {
-                             displayAttachedFileName = `All ${allFilesCount} file(s) selected for prompt`;
-                        } else {
-                             displayAttachedFileName = `${promptSelectedFilePaths.length} file(s) selected for prompt`;
-                        }
-                    }
-                    return (
-                        <InputArea
-                            onPromptSubmit={handlePromptSubmit}
-                            onFileAttach={handleFileAttach}
-                            isLoading={isLoading || isGenerating || isLoadingSelectedFile || isLoadingModels}
-                            attachedFileName={displayAttachedFileName}
+                        
+                        {attachmentStatus && ( // from useRepomix
+                            <div className={`attachment-status ${attachmentStatus.includes('Failed') || attachmentStatus.includes('non-standard') ? 'warning' : 'success'}`}>
+                                {attachmentStatus}
+                            </div>
+                        )}
+
+                        {globalError && <div className="error-message main-error">{globalError}</div>}
+                        
+                        <ChatInterface
+                            history={chatHistory}
+                            onStartComparison={handleStartComparison}
+                            parsedRepomixData={parsedRepomixData} // from useRepomix
                         />
-                    );
-                })()}
+                        {chatIsLoading && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'user' && (
+                            <div className="loading-indicator">Thinking...</div>
+                        )}
+                        {/* Chat specific error is part of globalError now, or display separately if preferred */}
+
+                    </div>
+                    <InputArea
+                        onPromptSubmit={handlePromptSubmit}
+                        onFileAttach={handleManualFileAttach} // from useRepomix
+                        isLoading={anyLoading}
+                        attachedFileName={displayAttachedFileNameForInputArea}
+                    />
+                </div>
+
+                {(parsedRepomixData || comparisonView) && isFullScreenView && (
+                    <FileContentDisplay
+                        filePath={selectedFilePathForView} // from useRepomix
+                        content={selectedFileContentForView} // from useRepomix
+                        isLoading={isLoadingSelectedFileForView && !comparisonView} // from useRepomix
+                        comparisonData={comparisonView} // App specific UI state
+                        onCloseComparison={handleCloseComparison} // App specific UI state
+                    />
+                )}
             </div>
 
-            {(parsedRepomixData || comparisonView) && isFullScreenView && (
-                <FileContentDisplay
-                    filePath={selectedFilePath}
-                    content={selectedFileContent}
-                    isLoading={isLoadingSelectedFile && !comparisonView}
-                    comparisonData={comparisonView}
-                    onCloseComparison={handleCloseComparison}
-                />
-            )}
+            <footer className="app-footer">
+                {/* Footer content */}
+            </footer>
         </div>
-
-        <footer className="app-footer">
-            {/* Footer content */}
-        </footer>
-    </div>
-);
+    );
 }
 
 export default App;
