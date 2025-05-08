@@ -13,7 +13,7 @@ export default defineConfig({
         target: 'http://localhost:8003', // Target your backend server
         changeOrigin: true, // Recommended for virtual hosted sites
         // Optional: rewrite path if needed (but usually not if backend uses the same path)
-        rewrite: (path) => path.replace(/^\/api/, ''), // Remove /api prefix if backend doesn't expect it
+        //rewrite: (path) => path.replace(/^\/api/, ''), // Remove /api prefix if backend doesn't expect it
       }
     }
   }
