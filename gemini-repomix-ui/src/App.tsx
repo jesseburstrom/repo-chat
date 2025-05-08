@@ -1,5 +1,5 @@
 // gemini-repomix-ui/src/App.tsx
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'; // Added useMemo
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import ChatInterface from './ChatInterface';
 import InputArea from './InputArea';
 import RepomixForm from './RepomixForm';
@@ -7,9 +7,7 @@ import RepoSelector, { RepoInfo } from './RepoSelector';
 import FileTree from './FileTree';
 import FileContentDisplay from './FileContentDisplay';
 import { parseRepomixFile, ParsedRepomixData } from './utils/parseRepomix';
-// --- NEW IMPORTS ---
 import ModelSettings, { ClientGeminiModelInfo, TokenStats } from './ModelSettings';
-// --- END NEW IMPORTS ---
 import './App.css';
 
 export interface ChatMessage {
@@ -26,23 +24,19 @@ interface ComparisonViewData {
     suggestedContent: string;
 }
 
-// --- NEW: Type for backend Gemini API response ---
 interface GeminiApiResponse {
     success: boolean;
     text?: string;
     error?: string;
     inputTokens?: number;
     outputTokens?: number;
-    // totalTokens?: number; // Usually input + output, can be derived
     inputCost?: number;
     outputCost?: number;
     totalCost?: number;
     modelUsed?: string;
 }
-// --- END NEW TYPE ---
 
-
-const MAX_HISTORY_TURNS = 10; // Increased from 5 for more context
+const MAX_HISTORY_TURNS = 10;
 
 function App() {
   const [repoUrl, setRepoUrl] = useState('');
@@ -69,7 +63,7 @@ function App() {
   const [selectedFileContent, setSelectedFileContent] = useState<string | null>(null);
   const [isLoadingSelectedFile, setIsLoadingSelectedFile] = useState(false);
 
-  const [systemPrompt, setSystemPrompt] = useState<string>(''); // Your existing system prompt state
+  const [systemPrompt, setSystemPrompt] = useState<string>('');
   const [showSystemPromptInput, setShowSystemPromptInput] = useState<boolean>(false);
   const [isSystemPromptSaving, setIsSystemPromptSaving] = useState<boolean>(false);
   const [systemPromptMessage, setSystemPromptMessage] = useState<string | null>(null);
@@ -78,28 +72,23 @@ function App() {
   const [comparisonView, setComparisonView] = useState<ComparisonViewData | null>(null);
   const [isFullScreenView, setIsFullScreenView] = useState(false);
 
-  // --- NEW State for Model Selection and Stats ---
-  const [promptSelectedFilePaths, setPromptSelectedFilePaths] = useState<string[]>([]); // For FileTree selection
+  const [promptSelectedFilePaths, setPromptSelectedFilePaths] = useState<string[]>([]);
   const [availableModels, setAvailableModels] = useState<ClientGeminiModelInfo[]>([]);
-  const [selectedModelCallName, setSelectedModelCallName] = useState<string>(''); // Will be set from backend config
+  const [selectedModelCallName, setSelectedModelCallName] = useState<string>('');
   const [isLoadingModels, setIsLoadingModels] = useState<boolean>(true);
   const [currentCallStats, setCurrentCallStats] = useState<TokenStats | null>(null);
   const [totalSessionStats, setTotalSessionStats] = useState<TokenStats>({
       inputTokens: 0, outputTokens: 0, totalTokens: 0,
       inputCost: 0, outputCost: 0, totalCost: 0,
   });
-  // --- END NEW State ---
 
-  // Load System Prompt (your existing useEffect)
   useEffect(() => {
     const fetchSystemPrompt = async () => {
-        console.log("Fetching system prompt (file)...");
         try {
             const response = await fetch(`${prefix}/api/load-system-prompt`);
             const result = await response.json();
             if (result.success && typeof result.systemPrompt === 'string') {
                 setSystemPrompt(result.systemPrompt);
-                console.log("System prompt (file) loaded.");
             } else {
                 setSystemPrompt('');
             }
@@ -110,10 +99,9 @@ function App() {
     fetchSystemPrompt();
   }, []);
 
-  // --- NEW: Fetch Gemini Config (Models and Current Selection) ---
   const fetchGeminiConfig = useCallback(async () => {
     setIsLoadingModels(true);
-    setError(null); // Clear previous errors
+    setError(null);
     try {
         const response = await fetch(`${prefix}/api/gemini-config`);
         const result = await response.json();
@@ -124,22 +112,17 @@ function App() {
         if (result.currentModelCallName) {
             setSelectedModelCallName(result.currentModelCallName);
         } else if (result.models && result.models.length > 0) {
-            // Fallback to the first model in the list if no current one is set from backend
             setSelectedModelCallName(result.models[0].callName);
         }
-        console.log("Gemini model config loaded. Current selection:", result.currentModelCallName || "None");
     } catch (err: any) {
         console.error("Failed to fetch Gemini config:", err);
         setError("Could not load AI model configurations. Please check the backend. " + err.message);
-        setAvailableModels([]); // Clear models on error
+        setAvailableModels([]);
     } finally {
         setIsLoadingModels(false);
     }
   }, []);
-  // --- END NEW ---
 
-
-  // Save System Prompt (your existing useCallback)
   const handleSaveSystemPrompt = useCallback(async () => {
     setIsSystemPromptSaving(true);
     setSystemPromptMessage(null);
@@ -197,20 +180,19 @@ function App() {
       }
   }, []);
 
-  // MODIFIED: useEffect to fetch both repos and gemini config
   useEffect(() => {
       fetchAvailableRepos();
-      fetchGeminiConfig(); // Fetch model config on initial load
-  }, [fetchAvailableRepos, fetchGeminiConfig]); // Add fetchGeminiConfig to dependencies
+      fetchGeminiConfig();
+  }, [fetchAvailableRepos, fetchGeminiConfig]);
 
   const clearFileData = useCallback(() => {
     setAttachedFileContent(null);
     setAttachedFileName(null);
     setParsedRepomixData(null);
     setSelectedFilePath(null);
-    setPromptSelectedFilePaths([]); // Clear prompt selection
+    setPromptSelectedFilePaths([]);
     setSelectedFileContent(null);
-    if (!comparisonView) setIsFullScreenView(false); // Only collapse if not in comparison
+    if (!comparisonView) setIsFullScreenView(false);
   }, [comparisonView]);
 
   useEffect(() => {
@@ -231,6 +213,12 @@ function App() {
       }, 50);
   }, [parsedRepomixData, comparisonView]);
 
+  // Helper function to get all valid file paths from parsed data
+  const getAllFilePathsFromParsedData = (data: ParsedRepomixData | null): string[] => {
+    if (!data || !data.directoryStructure || !data.fileContents) return [];
+    return data.directoryStructure.filter(p => data.fileContents.hasOwnProperty(p) && !p.endsWith('/'));
+  };
+
   const loadRepoFileContent = useCallback(async (filename: string): Promise<boolean> => {
     if (!filename) {
         clearFileData();
@@ -241,7 +229,7 @@ function App() {
     setIsLoadingFileContent(true);
     setError(null);
     setRepoListError(null);
-    clearFileData();
+    clearFileData(); // This will clear promptSelectedFilePaths
     setSelectedRepoFile(filename);
     clearAttachmentStatus();
     setAttachmentStatus(`Attaching ${filename}...`);
@@ -252,22 +240,26 @@ function App() {
         const response = await fetch(`${prefix}/api/get-file-content/${encodeURIComponent(filename)}`);
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.error || `HTTP error ${response.status}`);
+        
         setAttachedFileContent(result.content);
         setAttachedFileName(filename);
         const parsedData = parseRepomixFile(result.content);
+
         if (parsedData) {
             setParsedRepomixData(parsedData);
             setAttachmentStatus(`Attached & Parsed ${filename} successfully.`);
+            // *** CHANGE: Select all files by default ***
+            setPromptSelectedFilePaths(getAllFilePathsFromParsedData(parsedData));
         } else {
-            setParsedRepomixData(null);
+            setParsedRepomixData(null); // Ensure it's null if parsing fails
             setAttachmentStatus(`Attached ${filename} (non-standard format?).`);
+            setPromptSelectedFilePaths([]); // Clear if no parsed data
         }
-        setPromptSelectedFilePaths([]); // Clear previous prompt selections
         attachmentStatusTimer.current = setTimeout(clearAttachmentStatus, 3000);
         return true;
     } catch (err: any) {
         setError(`Failed to load content for ${filename}: ${err.message}`);
-        clearFileData();
+        clearFileData(); // This will clear promptSelectedFilePaths
         setSelectedRepoFile("");
         setAttachmentStatus(`Failed to attach ${filename}.`);
         attachmentStatusTimer.current = setTimeout(clearAttachmentStatus, 5000);
@@ -283,21 +275,27 @@ function App() {
       setGenerationMessage(null);
       setGenerationError(null);
       clearAttachmentStatus();
-      clearFileData();
+      clearFileData(); // This will clear promptSelectedFilePaths
       setSelectedRepoFile("");
+
       const reader = new FileReader();
       reader.onload = (event) => {
           const content = event.target?.result as string;
           setAttachedFileContent(content);
           setAttachedFileName(file.name);
           const parsedData = parseRepomixFile(content);
-          setParsedRepomixData(parsedData);
+          setParsedRepomixData(parsedData); // Set parsed data first
           setIsLoading(false);
-          setPromptSelectedFilePaths([]); // Clear previous selections
+          // *** CHANGE: Select all files by default ***
+          if (parsedData) {
+            setPromptSelectedFilePaths(getAllFilePathsFromParsedData(parsedData));
+          } else {
+            setPromptSelectedFilePaths([]); // Clear if no parsed data
+          }
       };
       reader.onerror = (err) => {
           setError(`Error reading file: ${err}`);
-          clearFileData();
+          clearFileData(); // This will clear promptSelectedFilePaths
           setIsLoading(false);
       };
       reader.readAsText(file);
@@ -309,7 +307,7 @@ function App() {
     setIsGenerating(true);
     setGenerationMessage(null);
     setGenerationError(null);
-    clearFileData();
+    clearFileData(); // This will clear promptSelectedFilePaths
     clearAttachmentStatus();
     setSelectedRepoFile("");
     try {
@@ -325,16 +323,16 @@ function App() {
         setGenerationMessage(`Success! Generated: ${outputFilename}. Loading...`);
         await fetchAvailableRepos();
         setTimeout(async () => {
+            // loadRepoFileContent will now handle setting promptSelectedFilePaths by default
             const loaded = await loadRepoFileContent(outputFilename);
             if (loaded) {
                 setGenerationMessage(`Generated & Loaded: ${outputFilename}`);
                 setSelectedRepoFile(outputFilename);
-                setPromptSelectedFilePaths([]); // Clear prompt selection
             } else {
                 setGenerationError(`Generated ${outputFilename}, but failed to load/parse.`);
                 setGenerationMessage(null);
             }
-        }, 50);
+        }, 50); // Timeout to allow UI to update and fetchAvailableRepos to potentially finish
       } else {
          setGenerationError("Repomix finished, but no output filename returned.");
          setGenerationMessage(null);
@@ -359,10 +357,9 @@ function App() {
 
   const handleCloseComparison = () => setComparisonView(null);
 
-  // MODIFIED: handlePromptSubmit to include modelCallName and handle new response
   const handlePromptSubmit = useCallback(async (prompt: string) => {
-      if (!prompt && !attachedFileContent && promptSelectedFilePaths.length === 0) { // Check promptSelectedFilePaths
-          setError("Please type a prompt or attach/select a generated description file or select files from the tree.");
+      if (!prompt && !attachedFileContent && promptSelectedFilePaths.length === 0) {
+          setError("Please type a prompt, attach a file, or select files from the tree.");
           return;
       }
       setIsLoading(true);
@@ -370,7 +367,7 @@ function App() {
       setGenerationMessage(null);
       setGenerationError(null);
       clearAttachmentStatus();
-      setCurrentCallStats(null); // Clear stats for previous call
+      setCurrentCallStats(null);
 
       let filesToIncludeInPromptSegment = "";
       if (promptSelectedFilePaths.length > 0 && parsedRepomixData) {
@@ -389,12 +386,12 @@ function App() {
       let combinedPrompt = "";
       if (filesToIncludeInPromptSegment) {
           combinedPrompt += `Context from selected repository files:\n${filesToIncludeInPromptSegment}\n\n`;
-      } else if (attachedFileContent) { // Fallback to full file if no specific files selected via checkboxes
+      } else if (attachedFileContent) {
           combinedPrompt += `Attached File Content (${attachedFileName || 'full_description.md'}):\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
       }
-      combinedPrompt += prompt ? `User Prompt: ${prompt}` : `User Prompt: Please analyze the attached file content.`;
+      combinedPrompt += prompt ? `User Prompt: ${prompt}` : `User Prompt: Please analyze the attached content.`;
 
-      const userDisplayPrompt = prompt || `(Using attached file: ${attachedFileName})`;
+      const userDisplayPrompt = prompt || (promptSelectedFilePaths.length > 0 ? `(Using ${promptSelectedFilePaths.length} selected files)` : `(Using attached file: ${attachedFileName})`);
       const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userDisplayPrompt }] };
 
       const historyForBackend: ChatMessage[] = chatHistory
@@ -402,7 +399,6 @@ function App() {
           .map(msg => ({ role: msg.role, parts: msg.parts }));
 
       setChatHistory(prev => [...prev, newUserMessage]);
-      console.log("Sending request to Backend Gemini Proxy. Model:", selectedModelCallName, "System prompt (file based) length:", systemPrompt.length);
 
       try {
           const response = await fetch(`${prefix}/api/call-gemini`, {
@@ -411,11 +407,11 @@ function App() {
                 body: JSON.stringify({
                     history: historyForBackend,
                     newMessage: combinedPrompt,
-                    systemPrompt: systemPrompt, // Your existing system prompt from file
-                    modelCallName: selectedModelCallName, // NEW: Send selected model
+                    systemPrompt: systemPrompt,
+                    modelCallName: selectedModelCallName,
                 }),
           });
-          const result: GeminiApiResponse = await response.json(); // MODIFIED: Use new response type
+          const result: GeminiApiResponse = await response.json();
 
           if (!response.ok || !result.success) {
               throw new Error(result.error || `API proxy error ${response.status}`);
@@ -423,7 +419,6 @@ function App() {
           const newModelMessage: ChatMessage = { role: 'model', parts: [{ text: result.text || "No text content received." }] };
           setChatHistory(prev => [...prev, newModelMessage]);
 
-          // --- NEW: Update Stats ---
           if (result.inputTokens !== undefined && result.outputTokens !== undefined && result.totalCost !== undefined) {
             const callStatsUpdate: TokenStats = {
                 inputTokens: result.inputTokens,
@@ -442,49 +437,32 @@ function App() {
                 inputCost: prev.inputCost + callStatsUpdate.inputCost,
                 outputCost: prev.outputCost + callStatsUpdate.outputCost,
                 totalCost: prev.totalCost + callStatsUpdate.totalCost,
-                modelUsed: prev.modelUsed // Session model used doesn't make as much sense, keep current call's
+                modelUsed: prev.modelUsed
             }));
-            // If backend used a different model (e.g. fallback), update our selection
             if (result.modelUsed && result.modelUsed !== selectedModelCallName) {
                 setSelectedModelCallName(result.modelUsed);
-                console.log("Model selection updated by backend to:", result.modelUsed);
             }
-          } else {
-            console.warn("Token stats not received in API response.");
           }
-          // --- END NEW Stats Update ---
-
       } catch (apiError: any) {
           setError(`Error: ${apiError.message}`);
           setChatHistory(prev => prev.slice(0, -1));
       } finally {
           setIsLoading(false);
       }
-  }, [chatHistory, attachedFileContent, attachedFileName, clearAttachmentStatus, systemPrompt, selectedModelCallName, promptSelectedFilePaths, parsedRepomixData]); // MODIFIED: Added dependencies
+  }, [chatHistory, attachedFileContent, attachedFileName, clearAttachmentStatus, systemPrompt, selectedModelCallName, promptSelectedFilePaths, parsedRepomixData]);
 
-  // --- NEW: Handler for model change from ModelSettings ---
   const handleModelChange = (newModelCallName: string) => {
     setSelectedModelCallName(newModelCallName);
-    // The backend will save this newModelCallName as the 'last selected'
-    // when the next /api/call-gemini request is made with it.
-    console.log("User selected model (will be sent on next API call):", newModelCallName);
   };
-  // --- END NEW ---
 
-  // --- NEW: Handlers for FileTree prompt selection ---
   const handleTogglePromptSelectedFile = useCallback((filePath: string) => {
     setPromptSelectedFilePaths(prev =>
         prev.includes(filePath) ? prev.filter(p => p !== filePath) : [...prev, filePath]
     );
   }, []);
-
-  const allFilePathsInCurrentRepomix = useMemo(() => {
-    if (!parsedRepomixData?.directoryStructure) return [];
-    // Ensure we only select actual files that have content, not just directory entries if structure is mixed
-    return parsedRepomixData.directoryStructure.filter(p =>
-        !p.endsWith('/') && parsedRepomixData.fileContents.hasOwnProperty(p)
-    );
-  }, [parsedRepomixData]);
+  
+  // This useMemo correctly identifies all selectable files based on current parsedRepomixData
+  const allFilePathsInCurrentRepomix = useMemo(() => getAllFilePathsFromParsedData(parsedRepomixData), [parsedRepomixData]);
 
   const handleSelectAllPromptFiles = useCallback(() => {
       setPromptSelectedFilePaths([...allFilePathsInCurrentRepomix]);
@@ -493,7 +471,6 @@ function App() {
   const handleDeselectAllPromptFiles = useCallback(() => {
       setPromptSelectedFilePaths([]);
   }, []);
-  // --- END NEW ---
 
   return (
     <div className={`app-container ${isFullScreenView ? 'full-screen-file-view' : ''}`}>
@@ -514,19 +491,18 @@ function App() {
             {parsedRepomixData && isFullScreenView && !comparisonView && (
                 <FileTree
                     structure={parsedRepomixData.directoryStructure}
-                    selectedFilePath={selectedFilePath} // For viewing
-                    onSelectFile={handleSelectFile}     // For viewing
-                    promptSelectedFilePaths={promptSelectedFilePaths} // For prompt
-                    onTogglePromptSelectedFile={handleTogglePromptSelectedFile} // For prompt
-                    onSelectAllPromptFiles={handleSelectAllPromptFiles} // For prompt
-                    onDeselectAllPromptFiles={handleDeselectAllPromptFiles} // For prompt
+                    selectedFilePath={selectedFilePath}
+                    onSelectFile={handleSelectFile}
+                    promptSelectedFilePaths={promptSelectedFilePaths}
+                    onTogglePromptSelectedFile={handleTogglePromptSelectedFile}
+                    onSelectAllPromptFiles={handleSelectAllPromptFiles}
+                    onDeselectAllPromptFiles={handleDeselectAllPromptFiles}
                 />
             )}
 
             <div className="center-column">
                 <div className="scrollable-content-area">
                     <div className="top-controls-row">
-                        {/* Left Half */}
                         <div className="top-controls-left">
                             <RepomixForm
                                 repoUrl={repoUrl}
@@ -542,7 +518,6 @@ function App() {
                                 isLoading={isLoadingRepos || isLoadingFileContent}
                                 selectedValue={selectedRepoFile}
                             />
-                            {/* === MOVED SYSTEM PROMPT (FILE) UI HERE === */}
                             <div className="system-prompt-settings-group">
                                 <button
                                     onClick={() => setShowSystemPromptInput(prev => !prev)}
@@ -576,10 +551,7 @@ function App() {
                                     </div>
                                 )}
                             </div>
-                            {/* === END MOVED SYSTEM PROMPT (FILE) UI === */}
                         </div>
-
-                        {/* Right Half - Now only ModelSettings */}
                         <div className="top-controls-right">
                             <ModelSettings
                                 availableModels={availableModels}
@@ -592,8 +564,6 @@ function App() {
                             />
                         </div>
                     </div>
-
-                    {/* ... (rest of the scrollable content: attachmentStatus, repoListError, ChatInterface, etc.) */}
                     {attachmentStatus && (
                         <div className={`attachment-status ${attachmentStatus.includes('Failed') || attachmentStatus.includes('non-standard') ? 'warning' : 'success'}`}>
                             {attachmentStatus}
@@ -606,11 +576,15 @@ function App() {
                     )}
                     {error && <div className="error-message chat-error">{error}</div>}
                 </div>
-                {/* --- Modified InputArea call to display correct attached file info --- */}
                 {(() => {
                     let displayAttachedFileName: string | null = attachedFileName;
                     if (promptSelectedFilePaths.length > 0) {
-                        displayAttachedFileName = `${promptSelectedFilePaths.length} file(s) selected from tree for prompt`;
+                        const allFilesCount = allFilePathsInCurrentRepomix.length;
+                        if (allFilesCount > 0 && promptSelectedFilePaths.length === allFilesCount) {
+                             displayAttachedFileName = `All ${allFilesCount} file(s) selected for prompt`;
+                        } else {
+                             displayAttachedFileName = `${promptSelectedFilePaths.length} file(s) selected for prompt`;
+                        }
                     }
                     return (
                         <InputArea
