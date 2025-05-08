@@ -13,8 +13,12 @@ interface TreeNode {
 
 interface FileTreeProps {
     structure: string[] | null;
-    selectedFilePath: string | null;
-    onSelectFile: (filePath: string) => void;
+    selectedFilePath: string | null; // For viewing
+    onSelectFile: (filePath: string) => void; // For viewing
+    promptSelectedFilePaths: string[]; // For prompt inclusion
+    onTogglePromptSelectedFile: (filePath: string) => void; // For prompt inclusion
+    onSelectAllPromptFiles: () => void;
+    onDeselectAllPromptFiles: () => void;
 }
 
 // --- Helper Function to Build the Tree ---
@@ -82,28 +86,53 @@ interface TreeNodeProps {
     node: TreeNode;
     selectedFilePath: string | null;
     onSelectFile: (filePath: string) => void;
+    promptSelectedFilePaths: string[];
+    onTogglePromptSelectedFile: (filePath: string) => void;
 }
 
-const TreeNodeComponent: React.FC<TreeNodeProps> = ({ node, selectedFilePath, onSelectFile }) => {
-    const isSelected = !node.isFolder && node.path === selectedFilePath;
+const TreeNodeComponent: React.FC<TreeNodeProps> = ({
+    node,
+    selectedFilePath,
+    onSelectFile,
+    promptSelectedFilePaths,
+    onTogglePromptSelectedFile
+}) => {
+    const isSelectedForViewing = !node.isFolder && node.path === selectedFilePath;
     const indentation = node.depth * 15; // Adjust indentation amount as needed (pixels)
 
-    const handleClick = () => {
+    const handleFileTextClick = () => {
         if (!node.isFolder) {
             onSelectFile(node.path);
         }
         // TODO: Implement folder expansion/collapse state if desired
     };
 
+    const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        e.stopPropagation(); // Prevent any parent click handlers
+        if (!node.isFolder) { // Should only be for files
+            onTogglePromptSelectedFile(node.path);
+        }
+    };
+
     return (
         <>
             <li
-                className={`${node.isFolder ? 'folder' : 'file'} ${isSelected ? 'selected' : ''}`}
-                onClick={handleClick}
+                className={`${node.isFolder ? 'folder' : 'file'} ${isSelectedForViewing ? 'selected-for-viewing' : ''}`}
                 title={node.path} // Show full path on hover
-                style={{ paddingLeft: `${indentation}px` }} // Apply indentation
+                style={{ paddingLeft: `${indentation + (!node.isFolder ? 0 : 20)}px` }} // Apply indentation, shift folders if no checkbox
             >
-                {node.isFolder ? '📁' : '📄'} {node.name} {/* Basic icons */}
+                {!node.isFolder && (
+                    <input
+                        type="checkbox"
+                        checked={promptSelectedFilePaths.includes(node.path)}
+                        onChange={handleCheckboxChange}
+                        onClick={(e) => e.stopPropagation()} // Ensure click doesn't bubble
+                        aria-label={`Select file ${node.name} for prompt`}
+                    />
+                )}
+                <span className="file-name-wrapper" onClick={handleFileTextClick}>
+                    {node.isFolder ? '📁' : '📄'} {node.name} {/* Basic icons */}
+                </span>
             </li>
             {node.isFolder && node.children.length > 0 && (
                 // TODO: Wrap children in a conditional block based on expansion state
@@ -114,6 +143,8 @@ const TreeNodeComponent: React.FC<TreeNodeProps> = ({ node, selectedFilePath, on
                             node={child}
                             selectedFilePath={selectedFilePath}
                             onSelectFile={onSelectFile}
+                            promptSelectedFilePaths={promptSelectedFilePaths}
+                            onTogglePromptSelectedFile={onTogglePromptSelectedFile}
                         />
                     ))}
                 </ul>
@@ -124,7 +155,14 @@ const TreeNodeComponent: React.FC<TreeNodeProps> = ({ node, selectedFilePath, on
 
 
 // --- Main FileTree Component ---
-const FileTree: React.FC<FileTreeProps> = ({ structure, selectedFilePath, onSelectFile }) => {
+const FileTree: React.FC<FileTreeProps> = ({
+    structure,
+    selectedFilePath,
+    onSelectFile,
+    promptSelectedFilePaths,
+    onTogglePromptSelectedFile,
+    onSelectAllPromptFiles,
+    onDeselectAllPromptFiles }) => {
     // Memoize the tree structure generation
     const treeData = useMemo(() => {
         if (!structure || structure.length === 0) {
@@ -139,7 +177,13 @@ const FileTree: React.FC<FileTreeProps> = ({ structure, selectedFilePath, onSele
 
     return (
         <div className="file-tree-panel">
-            <h4>Project Files</h4>
+            <h4>Project Files (for Prompt Context)</h4>
+            {treeData.length > 0 && (
+                <div className="file-tree-controls">
+                    <button onClick={onSelectAllPromptFiles} title="Select all files to include in prompt">Select All</button>
+                    <button onClick={onDeselectAllPromptFiles} title="Deselect all files from prompt">Deselect All</button>
+                </div>
+            )}
             <ul>
                 {treeData.map((node) => (
                      <TreeNodeComponent
@@ -147,6 +191,8 @@ const FileTree: React.FC<FileTreeProps> = ({ structure, selectedFilePath, onSele
                         node={node}
                         selectedFilePath={selectedFilePath}
                         onSelectFile={onSelectFile}
+                        promptSelectedFilePaths={promptSelectedFilePaths}
+                        onTogglePromptSelectedFile={onTogglePromptSelectedFile}
                     />
                 ))}
             </ul>

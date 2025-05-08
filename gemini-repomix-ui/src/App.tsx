@@ -1,5 +1,5 @@
 // gemini-repomix-ui/src/App.tsx
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'; // Added useMemo
 import ChatInterface from './ChatInterface';
 import InputArea from './InputArea';
 import RepomixForm from './RepomixForm';
@@ -79,6 +79,7 @@ function App() {
   const [isFullScreenView, setIsFullScreenView] = useState(false);
 
   // --- NEW State for Model Selection and Stats ---
+  const [promptSelectedFilePaths, setPromptSelectedFilePaths] = useState<string[]>([]); // For FileTree selection
   const [availableModels, setAvailableModels] = useState<ClientGeminiModelInfo[]>([]);
   const [selectedModelCallName, setSelectedModelCallName] = useState<string>(''); // Will be set from backend config
   const [isLoadingModels, setIsLoadingModels] = useState<boolean>(true);
@@ -207,6 +208,7 @@ function App() {
     setAttachedFileName(null);
     setParsedRepomixData(null);
     setSelectedFilePath(null);
+    setPromptSelectedFilePaths([]); // Clear prompt selection
     setSelectedFileContent(null);
     if (!comparisonView) setIsFullScreenView(false); // Only collapse if not in comparison
   }, [comparisonView]);
@@ -260,6 +262,7 @@ function App() {
             setParsedRepomixData(null);
             setAttachmentStatus(`Attached ${filename} (non-standard format?).`);
         }
+        setPromptSelectedFilePaths([]); // Clear previous prompt selections
         attachmentStatusTimer.current = setTimeout(clearAttachmentStatus, 3000);
         return true;
     } catch (err: any) {
@@ -290,6 +293,7 @@ function App() {
           const parsedData = parseRepomixFile(content);
           setParsedRepomixData(parsedData);
           setIsLoading(false);
+          setPromptSelectedFilePaths([]); // Clear previous selections
       };
       reader.onerror = (err) => {
           setError(`Error reading file: ${err}`);
@@ -297,7 +301,7 @@ function App() {
           setIsLoading(false);
       };
       reader.readAsText(file);
-  }, [clearFileData, clearAttachmentStatus]);
+  }, [clearFileData, clearAttachmentStatus ]);
 
   const handleGenerateDescription = useCallback(async (
     generateRepoUrl: string, includePatterns: string, excludePatterns: string
@@ -325,6 +329,7 @@ function App() {
             if (loaded) {
                 setGenerationMessage(`Generated & Loaded: ${outputFilename}`);
                 setSelectedRepoFile(outputFilename);
+                setPromptSelectedFilePaths([]); // Clear prompt selection
             } else {
                 setGenerationError(`Generated ${outputFilename}, but failed to load/parse.`);
                 setGenerationMessage(null);
@@ -356,8 +361,8 @@ function App() {
 
   // MODIFIED: handlePromptSubmit to include modelCallName and handle new response
   const handlePromptSubmit = useCallback(async (prompt: string) => {
-      if (!prompt && !attachedFileContent) {
-          setError("Please type a prompt or attach/select a generated description file.");
+      if (!prompt && !attachedFileContent && promptSelectedFilePaths.length === 0) { // Check promptSelectedFilePaths
+          setError("Please type a prompt or attach/select a generated description file or select files from the tree.");
           return;
       }
       setIsLoading(true);
@@ -367,8 +372,24 @@ function App() {
       clearAttachmentStatus();
       setCurrentCallStats(null); // Clear stats for previous call
 
+      let filesToIncludeInPromptSegment = "";
+      if (promptSelectedFilePaths.length > 0 && parsedRepomixData) {
+          let selectedFilesContentParts: string[] = [];
+          promptSelectedFilePaths.forEach(path => {
+              const content = parsedRepomixData.fileContents[path];
+              if (content) {
+                  selectedFilesContentParts.push(`<file path="${path}">\n${content}\n</file>`);
+              }
+          });
+          if (selectedFilesContentParts.length > 0) {
+              filesToIncludeInPromptSegment = `<selected_repository_files>\n${selectedFilesContentParts.join('\n')}\n</selected_repository_files>`;
+          }
+      }
+
       let combinedPrompt = "";
-      if (attachedFileContent) {
+      if (filesToIncludeInPromptSegment) {
+          combinedPrompt += `Context from selected repository files:\n${filesToIncludeInPromptSegment}\n\n`;
+      } else if (attachedFileContent) { // Fallback to full file if no specific files selected via checkboxes
           combinedPrompt += `Attached File Content (${attachedFileName || 'full_description.md'}):\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
       }
       combinedPrompt += prompt ? `User Prompt: ${prompt}` : `User Prompt: Please analyze the attached file content.`;
@@ -439,7 +460,7 @@ function App() {
       } finally {
           setIsLoading(false);
       }
-  }, [chatHistory, attachedFileContent, attachedFileName, clearAttachmentStatus, systemPrompt, selectedModelCallName]); // MODIFIED: Added selectedModelCallName
+  }, [chatHistory, attachedFileContent, attachedFileName, clearAttachmentStatus, systemPrompt, selectedModelCallName, promptSelectedFilePaths, parsedRepomixData]); // MODIFIED: Added dependencies
 
   // --- NEW: Handler for model change from ModelSettings ---
   const handleModelChange = (newModelCallName: string) => {
@@ -450,6 +471,29 @@ function App() {
   };
   // --- END NEW ---
 
+  // --- NEW: Handlers for FileTree prompt selection ---
+  const handleTogglePromptSelectedFile = useCallback((filePath: string) => {
+    setPromptSelectedFilePaths(prev =>
+        prev.includes(filePath) ? prev.filter(p => p !== filePath) : [...prev, filePath]
+    );
+  }, []);
+
+  const allFilePathsInCurrentRepomix = useMemo(() => {
+    if (!parsedRepomixData?.directoryStructure) return [];
+    // Ensure we only select actual files that have content, not just directory entries if structure is mixed
+    return parsedRepomixData.directoryStructure.filter(p =>
+        !p.endsWith('/') && parsedRepomixData.fileContents.hasOwnProperty(p)
+    );
+  }, [parsedRepomixData]);
+
+  const handleSelectAllPromptFiles = useCallback(() => {
+      setPromptSelectedFilePaths([...allFilePathsInCurrentRepomix]);
+  }, [allFilePathsInCurrentRepomix]);
+
+  const handleDeselectAllPromptFiles = useCallback(() => {
+      setPromptSelectedFilePaths([]);
+  }, []);
+  // --- END NEW ---
 
   return (
     <div className={`app-container ${isFullScreenView ? 'full-screen-file-view' : ''}`}>
@@ -470,8 +514,12 @@ function App() {
             {parsedRepomixData && isFullScreenView && !comparisonView && (
                 <FileTree
                     structure={parsedRepomixData.directoryStructure}
-                    selectedFilePath={selectedFilePath}
-                    onSelectFile={handleSelectFile}
+                    selectedFilePath={selectedFilePath} // For viewing
+                    onSelectFile={handleSelectFile}     // For viewing
+                    promptSelectedFilePaths={promptSelectedFilePaths} // For prompt
+                    onTogglePromptSelectedFile={handleTogglePromptSelectedFile} // For prompt
+                    onSelectAllPromptFiles={handleSelectAllPromptFiles} // For prompt
+                    onDeselectAllPromptFiles={handleDeselectAllPromptFiles} // For prompt
                 />
             )}
 
@@ -558,13 +606,21 @@ function App() {
                     )}
                     {error && <div className="error-message chat-error">{error}</div>}
                 </div>
-
-                <InputArea
-                    onPromptSubmit={handlePromptSubmit}
-                    onFileAttach={handleFileAttach}
-                    isLoading={isLoading || isGenerating || isLoadingSelectedFile || isLoadingModels}
-                    attachedFileName={attachedFileName}
-                />
+                {/* --- Modified InputArea call to display correct attached file info --- */}
+                {(() => {
+                    let displayAttachedFileName: string | null = attachedFileName;
+                    if (promptSelectedFilePaths.length > 0) {
+                        displayAttachedFileName = `${promptSelectedFilePaths.length} file(s) selected from tree for prompt`;
+                    }
+                    return (
+                        <InputArea
+                            onPromptSubmit={handlePromptSubmit}
+                            onFileAttach={handleFileAttach}
+                            isLoading={isLoading || isGenerating || isLoadingSelectedFile || isLoadingModels}
+                            attachedFileName={displayAttachedFileName}
+                        />
+                    );
+                })()}
             </div>
 
             {(parsedRepomixData || comparisonView) && isFullScreenView && (
