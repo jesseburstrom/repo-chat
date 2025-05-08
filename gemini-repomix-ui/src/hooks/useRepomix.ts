@@ -1,10 +1,9 @@
-// src/hooks/useRepomix.ts
+// gemini-repomix-ui/src/hooks/useRepomix.ts
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
     listGeneratedFiles as apiListGeneratedFiles,
     getFileContent as apiGetFileContent,
     runRepomix as apiRunRepomix,
-    
 } from '../services/api';
 import { parseRepomixFile, ParsedRepomixData } from '../utils/parseRepomix';
 import type { RepoInfo } from '../RepoSelector';
@@ -16,21 +15,20 @@ const getAllFilePathsFromParsedData = (data: ParsedRepomixData | null): string[]
 };
 
 export function useRepomix(initialRepoUrl: string = '') {
-    const [repoUrl, setRepoUrl] = useState(initialRepoUrl); // For generation form
+    const [repoUrl, setRepoUrl] = useState(initialRepoUrl);
     const [availableRepos, setAvailableRepos] = useState<RepoInfo[]>([]);
     const [isLoadingRepos, setIsLoadingRepos] = useState(false);
     const [repoListError, setRepoListError] = useState<string | null>(null);
 
-    const [selectedRepoFile, setSelectedRepoFile] = useState<string>(""); // Filename of the selected .md repomix output
-    const [isLoadingFileContent, setIsLoadingFileContent] = useState(false); // For loading the .md file
+    const [selectedRepoFile, setSelectedRepoFile] = useState<string>("");
+    const [isLoadingFileContent, setIsLoadingFileContent] = useState(false);
     const [fileContentError, setFileContentError] = useState<string | null>(null);
 
-
-    const [attachedFileContent, setAttachedFileContent] = useState<string | null>(null); // Content of the loaded .md file
-    const [attachedFileName, setAttachedFileName] = useState<string | null>(null); // Name of the loaded .md file
+    // const [attachedFileContent, setAttachedFileContent] = useState<string | null>(null); // --- REMOVED ---
+    const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
     
     const [parsedRepomixData, setParsedRepomixData] = useState<ParsedRepomixData | null>(null);
-    const [selectedFilePathForView, setSelectedFilePathForView] = useState<string | null>(null); // Path of a file within the parsed repomix structure to view
+    const [selectedFilePathForView, setSelectedFilePathForView] = useState<string | null>(null);
     const [selectedFileContentForView, setSelectedFileContentForView] = useState<string | null>(null);
     const [isLoadingSelectedFileForView, setIsLoadingSelectedFileForView] = useState(false);
 
@@ -43,6 +41,8 @@ export function useRepomix(initialRepoUrl: string = '') {
     const [attachmentStatus, setAttachmentStatus] = useState<string | null>(null);
     const attachmentStatusTimer = useRef<number | null>(null);
 
+    const justGeneratedFile = useRef<string | null>(null);
+
     const clearAttachmentStatus = useCallback(() => {
         if (attachmentStatusTimer.current) {
           clearTimeout(attachmentStatusTimer.current);
@@ -52,14 +52,13 @@ export function useRepomix(initialRepoUrl: string = '') {
     }, []);
 
     const clearFileData = useCallback(() => { 
-        setAttachedFileContent(null);
+        // setAttachedFileContent(null); // --- REMOVED ---
         setAttachedFileName(null);
         setParsedRepomixData(null);
         setSelectedFilePathForView(null);
         setPromptSelectedFilePaths([]);
         setSelectedFileContentForView(null);
     }, []);
-
 
     const fetchAvailableRepos = useCallback(async () => {
         setIsLoadingRepos(true);
@@ -87,7 +86,7 @@ export function useRepomix(initialRepoUrl: string = '') {
         }
         setIsLoadingFileContent(true);
         setFileContentError(null);
-        setRepoListError(null); // Clear previous repo list error
+        setRepoListError(null);
         clearFileData();
         setSelectedRepoFile(filename);
         clearAttachmentStatus();
@@ -95,17 +94,15 @@ export function useRepomix(initialRepoUrl: string = '') {
         
         const selectedRepoInfo = availableRepos.find(repo => repo.filename === filename);
         if (selectedRepoInfo?.repoIdentifier) {
-            // This updates the repoUrl for the RepomixForm, which might be unexpected
-            // Consider if this auto-update is desired or if repoUrl for form should be separate
             setRepoUrl(`https://github.com/${selectedRepoInfo.repoIdentifier}`);
         }
 
         const result = await apiGetFileContent(filename);
         if (result.success && result.content) {
-            const rawContent = result.content; // Store in a local variable
-            setAttachedFileContent(rawContent); // Set the state
+            const rawContent = result.content; // Keep rawContent local
+            // setAttachedFileContent(rawContent); // --- REMOVED ---
             setAttachedFileName(filename);
-            const parsedData = parseRepomixFile(result.content);
+            const parsedData = parseRepomixFile(rawContent); // Use rawContent directly
 
             if (parsedData) {
                 setParsedRepomixData(parsedData);
@@ -113,10 +110,11 @@ export function useRepomix(initialRepoUrl: string = '') {
                 setPromptSelectedFilePaths(getAllFilePathsFromParsedData(parsedData));
             } else {
                 setParsedRepomixData(null);
-                setAttachmentStatus(`Attached ${filename} (non-standard format?).`);
+                setAttachmentStatus(`Attached ${filename} (non-standard format or parse error).`);
                 setPromptSelectedFilePaths([]);
             }
-            attachmentStatusTimer.current = setTimeout(clearAttachmentStatus, 3000);
+            if (attachmentStatusTimer.current) clearTimeout(attachmentStatusTimer.current);
+            attachmentStatusTimer.current = window.setTimeout(clearAttachmentStatus, 3000);
             setIsLoadingFileContent(false);
             return true;
         } else {
@@ -124,44 +122,63 @@ export function useRepomix(initialRepoUrl: string = '') {
             clearFileData();
             setSelectedRepoFile("");
             setAttachmentStatus(`Failed to attach ${filename}.`);
-            attachmentStatusTimer.current = setTimeout(clearAttachmentStatus, 5000);
+            if (attachmentStatusTimer.current) clearTimeout(attachmentStatusTimer.current);
+            attachmentStatusTimer.current = window.setTimeout(clearAttachmentStatus, 5000);
             setIsLoadingFileContent(false);
             return false;
         }
     }, [clearFileData, availableRepos, clearAttachmentStatus]);
 
+    useEffect(() => {
+        if (justGeneratedFile.current && availableRepos.find(r => r.filename === justGeneratedFile.current)) {
+            const filenameToLoad = justGeneratedFile.current;
+            justGeneratedFile.current = null; 
+
+            console.log(`[useRepomix Effect] New file "${filenameToLoad}" detected in list. Attempting to load.`);
+            (async () => { 
+                const loaded = await loadRepoFileContent(filenameToLoad);
+                if (loaded) {
+                    setGenerationMessage(`Generated & Loaded: ${filenameToLoad}`);
+                } else {
+                    setGenerationError(`Generated ${filenameToLoad}, but failed to load/parse it. Please try selecting it manually.`);
+                    setGenerationMessage(null);
+                }
+            })();
+        }
+    }, [availableRepos, loadRepoFileContent, setGenerationMessage, setGenerationError]);
+
+
     const handleManualFileAttach = useCallback((file: File) => {
-        // setIsLoading(true); // This isLoading is for chat, handle separately
         setFileContentError(null);
         setGenerationMessage(null);
         setGenerationError(null);
         clearAttachmentStatus();
         clearFileData();
-        setSelectedRepoFile(""); // Clear repo selector if a file is manually attached
+        setSelectedRepoFile("");
 
         const reader = new FileReader();
         reader.onload = (event) => {
             const content = event.target?.result as string;
-            setAttachedFileContent(content);
+            // setAttachedFileContent(content); // --- REMOVED ---
             setAttachedFileName(file.name);
-            const parsedData = parseRepomixFile(content);
+            const parsedData = parseRepomixFile(content); // Use content directly
             setParsedRepomixData(parsedData);
-            // setIsLoading(false);
             if (parsedData) {
               setPromptSelectedFilePaths(getAllFilePathsFromParsedData(parsedData));
               setAttachmentStatus(`Attached & Parsed ${file.name} successfully.`);
             } else {
               setPromptSelectedFilePaths([]);
-              setAttachmentStatus(`Attached ${file.name} (non-standard format?).`);
+              setAttachmentStatus(`Attached ${file.name} (non-standard format or parse error).`);
             }
-            attachmentStatusTimer.current = setTimeout(clearAttachmentStatus, 3000);
+            if (attachmentStatusTimer.current) clearTimeout(attachmentStatusTimer.current);
+            attachmentStatusTimer.current = window.setTimeout(clearAttachmentStatus, 3000);
         };
         reader.onerror = (err) => {
-            setFileContentError(`Error reading file: ${err}`); // Or use a dedicated error state
+            setFileContentError(`Error reading file: ${err}`);
             clearFileData();
-            // setIsLoading(false);
             setAttachmentStatus(`Failed to attach ${file.name}.`);
-            attachmentStatusTimer.current = setTimeout(clearAttachmentStatus, 5000);
+            if (attachmentStatusTimer.current) clearTimeout(attachmentStatusTimer.current);
+            attachmentStatusTimer.current = window.setTimeout(clearAttachmentStatus, 5000);
         };
         reader.readAsText(file);
     }, [clearFileData, clearAttachmentStatus]);
@@ -175,49 +192,35 @@ export function useRepomix(initialRepoUrl: string = '') {
         clearFileData();
         clearAttachmentStatus();
         setSelectedRepoFile("");
+        justGeneratedFile.current = null;
 
         const result = await apiRunRepomix({ repoUrl: generateRepoUrl, includePatterns, excludePatterns });
 
         if (result.success && result.outputFilename) {
-            setGenerationMessage(`Success! Generated: ${result.outputFilename}. Loading...`);
-            await fetchAvailableRepos(); // Refresh the list
-            // It's good practice to ensure fetchAvailableRepos has completed before trying to load
-            // A simple timeout isn't robust. Better to chain promises or use async/await properly.
-            // For now, we assume fetchAvailableRepos updates `availableRepos` state,
-            // and loadRepoFileContent will use that updated state.
-            
-            // Wait briefly for state update from fetchAvailableRepos, then load.
-            // This is a slight hack; a more robust way would be to pass the new file info directly.
-             setTimeout(async () => {
-                const loaded = await loadRepoFileContent(result.outputFilename!); // `!` because we checked for it
-                if (loaded) {
-                    setGenerationMessage(`Generated & Loaded: ${result.outputFilename}`);
-                    setSelectedRepoFile(result.outputFilename!); // Ensure it's selected in the dropdown
-                } else {
-                    setGenerationError(`Generated ${result.outputFilename}, but failed to load/parse.`);
-                    setGenerationMessage(null);
-                }
-            }, 200); 
+            justGeneratedFile.current = result.outputFilename;
+            setGenerationMessage(`Success! Generated: ${result.outputFilename}. Refreshing list and preparing to load...`);
+            await fetchAvailableRepos();
         } else {
             setGenerationError(result.error || "Repomix finished, but no output filename or an error occurred.");
             if (result.stderr) console.warn("Repomix stderr:", result.stderr);
             setGenerationMessage(null);
+            justGeneratedFile.current = null;
         }
         setIsGenerating(false);
-    }, [clearFileData, fetchAvailableRepos, loadRepoFileContent, clearAttachmentStatus]);
+    }, [clearFileData, fetchAvailableRepos, clearAttachmentStatus, ]);
     
     const handleSelectFileForViewing = useCallback((filePath: string) => {
-        if (!parsedRepomixData) return;
-        // if (comparisonView) setComparisonView(null); // Handled in App.tsx
+        if (!parsedRepomixData || !filePath) {
+            setSelectedFilePathForView(null);
+            setSelectedFileContentForView(null);
+            return;
+        }
         setIsLoadingSelectedFileForView(true);
         setSelectedFilePathForView(filePath);
-        // Simulate async loading if content isn't immediately available or for UX
-        setTimeout(() => {
-            const content = parsedRepomixData.fileContents[filePath];
-            setSelectedFileContentForView(content !== undefined ? content : `// Error: Content not found`);
-            setIsLoadingSelectedFileForView(false);
-        }, 50);
-    }, [parsedRepomixData]);
+        const content = parsedRepomixData.fileContents[filePath];
+        setSelectedFileContentForView(content !== undefined ? content : `// Error: Content for ${filePath} not found in parsed data.`);
+        setIsLoadingSelectedFileForView(false);
+    }, [parsedRepomixData ]);
 
     const handleTogglePromptSelectedFile = useCallback((filePath: string) => {
         setPromptSelectedFilePaths(prev =>
@@ -235,12 +238,11 @@ export function useRepomix(initialRepoUrl: string = '') {
         setPromptSelectedFilePaths([]);
     }, []);
 
-
     return {
-        repoUrl, // For RepomixForm
-        onRepoUrlChange: setRepoUrl, // For RepomixForm
-        includePatterns: "**/*.css,**/*.dart,**/*.ts,**/*.tsx,**/*.py,**/*.cs,**/*.go", // Default, can be state if needed
-        excludePatterns: "*.log,tmp/", // Default, can be state if needed
+        repoUrl,
+        onRepoUrlChange: setRepoUrl,
+        includePatterns: "**/*.css,**/*.dart,**/*.ts,**/*.tsx,**/*.py,**/*.cs,**/*.go",
+        excludePatterns: "*.log,tmp/",
         handleGenerateRepomixFile,
         isGenerating,
         generationMessage,
@@ -249,27 +251,26 @@ export function useRepomix(initialRepoUrl: string = '') {
         availableRepos,
         isLoadingRepos,
         repoListError,
-        selectedRepoFile, // Filename of .md
-        loadRepoFileContent, // To select from dropdown
-        isLoadingFileContent, // Loading .md
+        selectedRepoFile,
+        loadRepoFileContent,
+        isLoadingFileContent,
         fileContentError,
 
-        handleManualFileAttach, // For manual file input
-        attachedFileName, // Name of .md or manually attached file
-        attachedFileContent, // Not directly exposed, used internally to get parsedRepomixData
-
+        handleManualFileAttach,
+        attachedFileName,
+        // attachedFileContent removed from return
         parsedRepomixData,
-        selectedFilePathForView, // Path of file inside .md to view
-        selectedFileContentForView, // Content of file inside .md to view
+        selectedFilePathForView,
+        selectedFileContentForView,
         isLoadingSelectedFileForView,
         handleSelectFileForViewing,
 
-        promptSelectedFilePaths, // Files selected for prompt context
+        promptSelectedFilePaths,
         handleTogglePromptSelectedFile,
         handleSelectAllPromptFiles,
         handleDeselectAllPromptFiles,
-        allFilePathsInCurrentRepomix, // For InputArea display
+        allFilePathsInCurrentRepomix,
 
-        attachmentStatus, // Generic status for attach/parse operations
+        attachmentStatus,
     };
 }
