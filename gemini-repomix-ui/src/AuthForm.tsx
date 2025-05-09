@@ -1,6 +1,6 @@
-// gemini-repomix-ui/src/AuthForm.tsx
 import React, { useState } from 'react';
 import { useAuth } from './contexts/AuthContext';
+import './AuthForm.css'; // <-- Import the new CSS file
 
 const AuthForm: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -18,27 +18,63 @@ const AuthForm: React.FC = () => {
     };
 
     return (
-        <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px', border: '1px solid #ccc', borderRadius: '8px' }}>
+        // Apply container class
+        <div className="auth-container">
             <h2>{isLogin ? 'Login' : 'Sign Up'}</h2>
-            <form onSubmit={handleSubmit}>
-                <div>
+            {/* Apply form class */}
+            <form onSubmit={handleSubmit} className="auth-form">
+                {/* Apply form group classes */}
+                <div className="auth-form-group">
                     <label htmlFor="email">Email:</label>
-                    <input type="email" id="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ width: '100%', padding: '8px', marginBottom: '10px' }} />
+                    <input
+                        type="email"
+                        id="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        disabled={isLoading} // Disable inputs while loading
+                    />
                 </div>
-                <div>
+                {/* Apply form group classes */}
+                <div className="auth-form-group">
                     <label htmlFor="password">Password:</label>
-                    <input type="password" id="password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ width: '100%', padding: '8px', marginBottom: '10px' }} />
+                    <input
+                        type="password"
+                        id="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        disabled={isLoading} // Disable inputs while loading
+                    />
                 </div>
-                {error && <p style={{ color: 'red' }}>{error.message}</p>}
-                <button type="submit" disabled={isLoading} style={{ padding: '10px 15px', marginRight: '10px' }}>
-                    {isLoading ? 'Processing...' : (isLogin ? 'Login' : 'Sign Up')}
-                </button>
-                <button type="button" onClick={() => setIsLogin(!isLogin)} style={{ padding: '10px 15px' }}>
-                    Switch to {isLogin ? 'Sign Up' : 'Login'}
-                </button>
+                {error && <p className="auth-error">{error.message}</p>}
+                {/* Apply button group and button classes */}
+                <div className="auth-button-group">
+                    <button
+                        type="submit"
+                        disabled={isLoading || !email || !password} // Disable if inputs are empty or loading
+                        className="auth-button auth-button-primary"
+                    >
+                        {isLoading ? 'Processing...' : (isLogin ? 'Login' : 'Sign Up')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setIsLogin(!isLogin)}
+                        disabled={isLoading} // Disable switching mode while loading
+                        className="auth-button auth-button-secondary"
+                    >
+                        Switch to {isLogin ? 'Sign Up' : 'Login'}
+                    </button>
+                </div>
             </form>
-            <hr style={{ margin: '20px 0' }} />
-            <button onClick={signInWithGitHub} disabled={isLoading} style={{ padding: '10px 15px', display: 'block', width: '100%', backgroundColor: '#333', color: 'white' }}>
+            {/* Apply separator style */}
+            <hr className="auth-separator" />
+            {/* Apply OAuth button style */}
+            <button
+                onClick={signInWithGitHub}
+                disabled={isLoading} // Disable while loading
+                className="auth-button auth-button-oauth"
+            >
                 {isLoading ? 'Processing...' : 'Sign in with GitHub'}
             </button>
             {/* Add other OAuth providers similarly */}

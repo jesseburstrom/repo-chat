@@ -1,0 +1,122 @@
+.auth-container {
+    max-width: 400px;
+    margin: 50px auto;
+    padding: 30px; /* Increased padding */
+    border: 1px solid #dadce0; /* Lighter border */
+    border-radius: 8px;
+    background-color: #ffffff; /* White background */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24); /* Soft shadow */
+    font-family: sans-serif;
+}
+
+.auth-container h2 {
+    margin-top: 0;
+    margin-bottom: 20px; /* More space below heading */
+    color: #333;
+    font-weight: 500;
+    text-align: center; /* Center heading */
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px; /* Space between form groups */
+}
+
+.auth-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px; /* Space between label and input */
+}
+
+.auth-form-group label {
+    font-size: 0.9em;
+    color: #5f6368;
+    font-weight: 500;
+}
+
+.auth-form-group input[type="email"],
+.auth-form-group input[type="password"] {
+    padding: 10px 12px; /* Increased padding */
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-family: inherit;
+    width: 100%; /* Ensure inputs take full width */
+    box-sizing: border-box; /* Include padding/border in width */
+}
+
+.auth-form-group input:focus {
+    outline: none;
+    border-color: #1a73e8; /* Highlight on focus */
+    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2); /* Subtle focus ring */
+}
+
+.auth-error {
+    color: #c5221f; /* Error color */
+    font-size: 0.9em;
+    margin-top: 5px;
+    text-align: center; /* Center error message */
+}
+
+.auth-button-group {
+    display: flex;
+    gap: 10px; /* Space between buttons */
+    justify-content: center; /* Center buttons */
+    margin-top: 10px; /* Space above buttons */
+}
+
+/* Base Button Styles (similar to other UI buttons) */
+.auth-button {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 4px; /* Slightly rounded corners */
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 1em;
+    transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+/* Primary Button (Login/Sign Up) */
+.auth-button-primary {
+    background-color: #1a73e8; /* Google Blue */
+    color: white;
+}
+.auth-button-primary:hover:not(:disabled) {
+    background-color: #185abc; /* Darker blue on hover */
+}
+
+/* Secondary Button (Switch mode) */
+.auth-button-secondary {
+    background-color: #e8eaed; /* Light grey */
+    color: #3c4043; /* Dark grey text */
+    border: 1px solid #dadce0; /* Optional: light border */
+}
+.auth-button-secondary:hover:not(:disabled) {
+    background-color: #dadce0; /* Darker grey on hover */
+}
+
+/* OAuth Buttons (GitHub, etc.) */
+.auth-button-oauth {
+    width: 100%; /* Full width button */
+    background-color: #24292e; /* GitHub dark grey */
+    color: white;
+    margin-top: 20px; /* Space above OAuth buttons */
+}
+.auth-button-oauth:hover:not(:disabled) {
+    background-color: #000; /* Black on hover */
+}
+
+/* Disabled State */
+.auth-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+    opacity: 0.7; /* Subtle visual cue */
+}
+
+/* Separator */
+.auth-separator {
+    margin: 30px 0; /* More space around separator */
+    border: none;
+    border-top: 1px solid #eee; /* Light line */
+}

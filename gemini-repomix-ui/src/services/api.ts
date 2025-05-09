@@ -45,108 +45,117 @@ export interface GeminiApiResponse extends BaseResponse { // Exporting as App.ts
     text?: string;
     inputTokens?: number;
     outputTokens?: number;
-    totalTokens?: number; // Added this as App.tsx calculates it
+    totalTokens?: number;
     inputCost?: number;
     outputCost?: number;
     totalCost?: number;
     modelUsed?: string;
 }
 
-// --- Helper function to get headers with Authorization token ---
-async function getAuthHeaders(): Promise<HeadersInit> {
+// --- Centralized Auth Error Handler ---
+async function handleCriticalAuthError(errorMessage?: string) {
+    console.warn(`[api.ts] Critical Authentication Error: ${errorMessage || 'Forcing sign out.'}`);
+    const { error: signOutError } = await supabase.auth.signOut();
+    if (signOutError) {
+        console.error('[api.ts] Error during forced signOut after API auth failure:', signOutError);
+        // Consider more drastic measures if signOut fails, e.g., alert user, clear local storage (carefully)
+        // For now, the primary mechanism is relying on onAuthStateChange after signOut.
+    }
+    // onAuthStateChange in AuthContext should handle redirecting to login.
+}
+
+// --- Common API Request Function ---
+async function makeApiRequest<T extends BaseResponse>(url: string, options: RequestInit = {}): Promise<T> {
     const { data: { session } } = await supabase.auth.getSession();
-    const headers: HeadersInit = {
-        'Content-Type': 'application/json', // Default Content-Type for JSON APIs
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json', // Default
+        // Spread options.headers if it's also a Record<string, string> or compatible
+        ...(options.headers as Record<string, string> || {}),
     };
+    
     if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
+    } else {
+        // Potentially log if a protected endpoint is called without a token,
+        // but let the backend return 401/403 to confirm.
+        console.warn(`[api.ts] No access token found in session for request to: ${url}. Request will proceed without Authorization header.`);
     }
-    return headers;
+
+    let response: Response;
+    try {
+        response = await fetch(url, { ...options, headers });
+    } catch (networkError: any) {
+        console.error(`[api.ts] Network error during API request to ${url}:`, networkError);
+        // Return a BaseResponse compatible error structure
+        return { success: false, error: networkError.message || "Network connection failed." } as T;
+    }
+
+    if (response.status === 401 || response.status === 403) {
+        const errorText = await response.text(); // Get raw text first for better debugging
+        let errorJson: BaseResponse = { success: false, error: `Access Denied (Status: ${response.status})` };
+        try {
+            errorJson = JSON.parse(errorText); // Try to parse as JSON
+        } catch (e) {
+            console.warn(`[api.ts] Could not parse ${response.status} error response as JSON:`, errorText);
+            errorJson.error = errorText || errorJson.error; // Use raw text if not JSON
+        }
+        
+        await handleCriticalAuthError(errorJson.error || `Server returned ${response.status}`);
+        // Even though we've initiated a sign-out, return an error object
+        // so the calling hook/component knows the specific request failed.
+        return { success: false, error: errorJson.error || `Access Denied (Status: ${response.status})` } as T;
+    }
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        let errorJson: BaseResponse = { success: false, error: `API request failed (Status: ${response.status})` };
+         try {
+            errorJson = JSON.parse(errorText);
+        } catch (e) {
+             console.warn(`[api.ts] Could not parse non-2xx error response as JSON:`, errorText);
+            errorJson.error = errorText || errorJson.error;
+        }
+        return { success: false, error: errorJson.error || `API request failed (Status: ${response.status})` } as T;
+    }
+
+    // If response.ok, try to parse as JSON.
+    // Handle cases where the response might be empty or not JSON.
+    const responseText = await response.text();
+    if (!responseText) { // Handle empty successful response (e.g., HTTP 204 No Content)
+        return { success: true } as T; // Or adjust based on expected non-JSON success
+    }
+    try {
+        return JSON.parse(responseText) as T;
+    } catch (jsonParseError) {
+        console.error(`[api.ts] Failed to parse successful response as JSON for ${url}:`, responseText, jsonParseError);
+        return { success: false, error: "Failed to parse server response." } as T;
+    }
 }
 
 
-// --- API Service Functions ---
+// --- Refactored API Service Functions ---
 
 export async function loadSystemPrompt(): Promise<LoadSystemPromptResponse> {
-    try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${API_PREFIX}/api/load-system-prompt`, { headers });
-        if (!response.ok) {
-            let errorMsg = `HTTP error ${response.status}`;
-            try {
-                const errData = await response.json();
-                errorMsg = errData.error || errorMsg;
-            } catch (e) { /* ignore parsing error */ }
-            return { success: false, error: errorMsg };
-        }
-        return response.json();
-    } catch (err: any) {
-        return { success: false, error: err.message || "Network error loading system prompt." };
-    }
+    return makeApiRequest<LoadSystemPromptResponse>(`${API_PREFIX}/api/load-system-prompt`);
 }
 
 export async function saveSystemPrompt(systemPrompt: string): Promise<SaveSystemPromptResponse> {
-    try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${API_PREFIX}/api/save-system-prompt`, {
-            method: 'POST',
-            headers: headers, // Content-Type is included from getAuthHeaders
-            body: JSON.stringify({ systemPrompt }),
-        });
-        if (!response.ok) {
-            let errorMsg = `HTTP error ${response.status}`;
-            try { const errData = await response.json(); errorMsg = errData.error || errorMsg; } catch (e) {/*ignore*/}
-            return { success: false, error: errorMsg };
-        }
-        return response.json();
-    } catch (err: any) {
-        return { success: false, error: err.message || "Network error saving system prompt." };
-    }
+    return makeApiRequest<SaveSystemPromptResponse>(`${API_PREFIX}/api/save-system-prompt`, {
+        method: 'POST',
+        body: JSON.stringify({ systemPrompt }),
+    });
 }
 
 export async function fetchGeminiConfig(): Promise<GeminiConfigResponse> {
-    try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${API_PREFIX}/api/gemini-config`, { headers });
-        if (!response.ok) {
-            let errorMsg = `HTTP error ${response.status}`;
-            try { const errData = await response.json(); errorMsg = errData.error || errorMsg; } catch (e) {/*ignore*/}
-            return { success: false, error: errorMsg };
-        }
-        return response.json();
-    } catch (err: any) {
-        return { success: false, error: err.message || "Network error fetching Gemini config." };
-    }
+    return makeApiRequest<GeminiConfigResponse>(`${API_PREFIX}/api/gemini-config`);
 }
 
 export async function listGeneratedFiles(): Promise<ListGeneratedFilesResponse> {
-    try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${API_PREFIX}/api/list-generated-files`, { headers });
-        if (!response.ok) {
-            let errorMsg = `HTTP error ${response.status}`;
-            try { const errData = await response.json(); errorMsg = errData.error || errorMsg; } catch (e) {/*ignore*/}
-            return { success: false, error: errorMsg };
-        }
-        return response.json();
-    } catch (err: any) {
-        return { success: false, error: err.message || "Network error listing generated files." };
-    }
+    return makeApiRequest<ListGeneratedFilesResponse>(`${API_PREFIX}/api/list-generated-files`);
 }
 
 export async function getFileContent(filename: string): Promise<GetFileContentResponse> {
-    try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${API_PREFIX}/api/get-file-content/${encodeURIComponent(filename)}`, { headers });
-        if (!response.ok) {
-            let errorMsg = `HTTP error ${response.status}`;
-            try { const errData = await response.json(); errorMsg = errData.error || errorMsg; } catch (e) {/*ignore*/}
-            return { success: false, error: errorMsg };
-        }
-        return response.json();
-    } catch (err: any) {
-        return { success: false, error: err.message || "Network error getting file content." };
-    }
+    return makeApiRequest<GetFileContentResponse>(`${API_PREFIX}/api/get-file-content/${encodeURIComponent(filename)}`);
 }
 
 interface RunRepomixParams {
@@ -155,21 +164,10 @@ interface RunRepomixParams {
     excludePatterns?: string;
 }
 export async function runRepomix(params: RunRepomixParams): Promise<RunRepomixResponse> {
-    try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${API_PREFIX}/api/run-repomix`, {
-            method: 'POST',
-            headers: headers, // Content-Type is included from getAuthHeaders
-            body: JSON.stringify(params),
-        });
-        const result: RunRepomixResponse = await response.json();
-        if (!response.ok && !result.error) {
-             return { ...result, success: false, error: result.error || `HTTP error ${response.status}` };
-        }
-        return result;
-    } catch (err: any) {
-        return { success: false, error: err.message || "Network error running Repomix." };
-    }
+    return makeApiRequest<RunRepomixResponse>(`${API_PREFIX}/api/run-repomix`, {
+        method: 'POST',
+        body: JSON.stringify(params),
+    });
 }
 
 interface CallGeminiParams {
@@ -179,19 +177,8 @@ interface CallGeminiParams {
     modelCallName?: string;
 }
 export async function callGemini(params: CallGeminiParams): Promise<GeminiApiResponse> {
-    try {
-        const headers = await getAuthHeaders();
-        const response = await fetch(`${API_PREFIX}/api/call-gemini`, {
-            method: 'POST',
-            headers: headers, // Content-Type is included from getAuthHeaders
-            body: JSON.stringify(params),
-        });
-        const result: GeminiApiResponse = await response.json();
-        if (!response.ok && !result.error) {
-             return { ...result, success: false, error: result.error || `API proxy error ${response.status}` };
-        }
-        return result;
-    } catch (err: any) {
-        return { success: false, error: err.message || "Network error calling Gemini." };
-    }
+    return makeApiRequest<GeminiApiResponse>(`${API_PREFIX}/api/call-gemini`, {
+        method: 'POST',
+        body: JSON.stringify(params),
+    });
 }
