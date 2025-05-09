@@ -15,6 +15,9 @@ import { useSystemPrompt } from './hooks/useSystemPrompt';
 import { useModels } from './hooks/useModels';
 import { useRepomix } from './hooks/useRepomix';
 
+import { useAuth } from './contexts/AuthContext'; // Import useAuth
+import AuthForm from './AuthForm'; // Import AuthForm
+
 // Import API service and types
 import * as api from './services/api'; // Import all as api
 //import type { GeminiApiResponse } from './services/api'; // Explicitly import if needed for type casting
@@ -34,6 +37,7 @@ interface ComparisonViewData {
 const MAX_HISTORY_TURNS = 10;
 
 function App() {
+    const { session, user, signOut, isLoading: authIsLoading } = useAuth();
     // --- UI State ---
     const [comparisonView, setComparisonView] = useState<ComparisonViewData | null>(null);
     const [isFullScreenView, setIsFullScreenView] = useState(false);
@@ -257,142 +261,164 @@ function App() {
 
     const anyLoading = chatIsLoading || isGenerating || isLoadingFileContent || isLoadingModels || isLoadingSelectedFileForView || isLoadingRepos || isSystemPromptSaving;
 
+    // If auth is loading, show a loading indicator
+    if (authIsLoading) {
+        return <div className="app-container" style={{textAlign: 'center', paddingTop: '50px'}}>Loading authentication...</div>;
+    }
+
+    // If no session, show the AuthForm
+    if (!session || !user) {
+        return <AuthForm />;
+    }
+
     return (
-        <div className={`app-container ${isFullScreenView ? 'full-screen-file-view' : ''}`}>
-            <header className="app-header">
+    <div className={`app-container ${isFullScreenView ? 'full-screen-file-view' : ''}`}>
+        <header className="app-header">
+            {/* Modified Header Section for Auth Info and Logout */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                 <h1>Gemini Repomix Assistant</h1>
-                {(parsedRepomixData || comparisonView) && (
-                    <button
-                        onClick={toggleFullScreenView}
-                        className="fullscreen-toggle-button"
-                        title={isFullScreenView ? "Exit Full Screen View" : "Expand File View"}
-                    >
-                        {isFullScreenView ? '📰 Collapse' : '↔️ Expand'}
-                    </button>
-                )}
-            </header>
-
-            <div className={`main-content-wrapper ${isFullScreenView ? 'full-screen-active' : ''}`}>
-                {parsedRepomixData && isFullScreenView && !comparisonView && (
-                    <FileTree
-                        structure={parsedRepomixData.directoryStructure}
-                        selectedFilePath={selectedFilePathForView}
-                        onSelectFile={handleSelectFileForViewing}
-                        promptSelectedFilePaths={promptSelectedFilePaths}
-                        onTogglePromptSelectedFile={handleTogglePromptSelectedFile}
-                        onSelectAllPromptFiles={handleSelectAllPromptFiles}
-                        onDeselectAllPromptFiles={handleDeselectAllPromptFiles}
-                    />
-                )}
-
-                <div className="center-column">
-                    <div className="scrollable-content-area">
-                        <div className="top-controls-row">
-                            <div className="top-controls-left">
-                                <RepomixForm
-                                    repoUrl={repoUrl} // from useRepomix
-                                    onRepoUrlChange={onRepoUrlChange} // from useRepomix
-                                    // Pass default include/exclude or manage them in useRepomix if they need to be dynamic
-                                    onGenerate={handleGenerateRepomixFile} // from useRepomix
-                                    isGenerating={isGenerating} // from useRepomix
-                                    generationMessage={generationMessage} // from useRepomix
-                                    generationError={generationError} // from useRepomix
-                                />
-                                <RepoSelector
-                                    repos={availableRepos} // from useRepomix
-                                    onSelectRepo={loadRepoFileContent} // from useRepomix
-                                    isLoading={isLoadingRepos || isLoadingFileContent} // from useRepomix
-                                    selectedValue={selectedRepoFile} // from useRepomix
-                                />
-                                <div className="system-prompt-settings-group">
-                                    <button
-                                        onClick={() => setShowSystemPromptInput(prev => !prev)}
-                                        className="toggle-system-prompt-button"
-                                        disabled={isSystemPromptSaving}
-                                    >
-                                        {showSystemPromptInput ? 'Hide' : 'Set'} System Prompt (File)
-                                    </button>
-                                    {showSystemPromptInput && (
-                                        <div className="system-prompt-input-area">
-                                            <textarea
-                                                value={systemPrompt} // from useSystemPrompt
-                                                onChange={(e) => setSystemPrompt(e.target.value)} // from useSystemPrompt
-                                                rows={3}
-                                                className="system-prompt-textarea"
-                                                disabled={isSystemPromptSaving} // from useSystemPrompt
-                                            />
-                                            <button
-                                                onClick={handleSaveSystemPrompt} // from useSystemPrompt
-                                                disabled={isSystemPromptSaving || !systemPrompt.trim()}
-                                                className="save-system-prompt-button"
-                                            >
-                                                {isSystemPromptSaving ? 'Saving...' : 'Save to File'}
-                                            </button>
-                                            {systemPromptMessage && ( /* from useSystemPrompt */
-                                                <p className={`system-prompt-status ${systemPromptMessage.includes('Error') ? 'error' : 'success'}`}>
-                                                    {systemPromptMessage}
-                                                </p>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="top-controls-right">
-                                <ModelSettings
-                                    availableModels={availableModels} // from useModels
-                                    selectedModelCallName={selectedModelCallName} // from useModels
-                                    onModelChange={handleModelChange} // from useModels
-                                    isLoadingModels={isLoadingModels} // from useModels
-                                    currentCallStats={currentCallStats} // from useModels
-                                    totalSessionStats={totalSessionStats} // from useModels
-                                    isChatLoading={chatIsLoading} // App specific
-                                />
-                            </div>
-                        </div>
-                        
-                        {attachmentStatus && ( // from useRepomix
-                            <div className={`attachment-status ${attachmentStatus.includes('Failed') || attachmentStatus.includes('non-standard') ? 'warning' : 'success'}`}>
-                                {attachmentStatus}
-                            </div>
-                        )}
-
-                        {globalError && <div className="error-message main-error">{globalError}</div>}
-                        
-                        <ChatInterface
-                            history={chatHistory}
-                            onStartComparison={handleStartComparison}
-                            parsedRepomixData={parsedRepomixData} // from useRepomix
-                        />
-                        {chatIsLoading && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'user' && (
-                            <div className="loading-indicator">Thinking...</div>
-                        )}
-                        {/* Chat specific error is part of globalError now, or display separately if preferred */}
-
+                {/* Conditionally render user info and logout button if user exists */}
+                {user && (
+                    <div>
+                        {user.email && <span style={{ marginRight: '15px', fontSize: '0.9em' }}>Logged in as: {user.email}</span>}
+                        <button onClick={signOut} style={{ padding: '8px 12px', fontSize: '0.9em', cursor: 'pointer' }}>Logout</button>
                     </div>
-                    <InputArea
-                        onPromptSubmit={handlePromptSubmit}
-                        onFileAttach={handleManualFileAttach} // from useRepomix
-                        isLoading={anyLoading}
-                        attachedFileName={displayAttachedFileNameForInputArea}
-                    />
-                </div>
-
-                {(parsedRepomixData || comparisonView) && isFullScreenView && (
-                    <FileContentDisplay
-                        filePath={selectedFilePathForView} // from useRepomix
-                        content={selectedFileContentForView} // from useRepomix
-                        isLoading={isLoadingSelectedFileForView && !comparisonView} // from useRepomix
-                        comparisonData={comparisonView} // App specific UI state
-                        onCloseComparison={handleCloseComparison} // App specific UI state
-                    />
                 )}
             </div>
+            {/* End of Modified Header Section */}
 
-            <footer className="app-footer">
-                {/* Footer content */}
-            </footer>
+            {(parsedRepomixData || comparisonView) && (
+                <button
+                    onClick={toggleFullScreenView}
+                    className="fullscreen-toggle-button"
+                    title={isFullScreenView ? "Exit Full Screen View" : "Expand File View"}
+                >
+                    {isFullScreenView ? '📰 Collapse' : '↔️ Expand'}
+                </button>
+            )}
+        </header>
+
+        <div className={`main-content-wrapper ${isFullScreenView ? 'full-screen-active' : ''}`}>
+            {parsedRepomixData && isFullScreenView && !comparisonView && (
+                <FileTree
+                    structure={parsedRepomixData.directoryStructure}
+                    selectedFilePath={selectedFilePathForView}
+                    onSelectFile={handleSelectFileForViewing}
+                    promptSelectedFilePaths={promptSelectedFilePaths}
+                    onTogglePromptSelectedFile={handleTogglePromptSelectedFile}
+                    onSelectAllPromptFiles={handleSelectAllPromptFiles}
+                    onDeselectAllPromptFiles={handleDeselectAllPromptFiles}
+                />
+            )}
+
+            <div className="center-column">
+                <div className="scrollable-content-area">
+                    <div className="top-controls-row">
+                        <div className="top-controls-left">
+                            <RepomixForm
+                                repoUrl={repoUrl} // from useRepomix
+                                onRepoUrlChange={onRepoUrlChange} // from useRepomix
+                                // Pass default include/exclude or manage them in useRepomix if they need to be dynamic
+                                onGenerate={handleGenerateRepomixFile} // from useRepomix
+                                isGenerating={isGenerating} // from useRepomix
+                                generationMessage={generationMessage} // from useRepomix
+                                generationError={generationError} // from useRepomix
+                            />
+                            <RepoSelector
+                                repos={availableRepos} // from useRepomix
+                                onSelectRepo={loadRepoFileContent} // from useRepomix
+                                isLoading={isLoadingRepos || isLoadingFileContent} // from useRepomix
+                                selectedValue={selectedRepoFile} // from useRepomix
+                            />
+                            <div className="system-prompt-settings-group">
+                                <button
+                                    onClick={() => setShowSystemPromptInput(prev => !prev)}
+                                    className="toggle-system-prompt-button"
+                                    disabled={isSystemPromptSaving}
+                                >
+                                    {showSystemPromptInput ? 'Hide' : 'Set'} System Prompt (File)
+                                </button>
+                                {showSystemPromptInput && (
+                                    <div className="system-prompt-input-area">
+                                        <textarea
+                                            value={systemPrompt} // from useSystemPrompt
+                                            onChange={(e) => setSystemPrompt(e.target.value)} // from useSystemPrompt
+                                            rows={3}
+                                            className="system-prompt-textarea"
+                                            disabled={isSystemPromptSaving} // from useSystemPrompt
+                                        />
+                                        <button
+                                            onClick={handleSaveSystemPrompt} // from useSystemPrompt
+                                            disabled={isSystemPromptSaving || (systemPrompt !== null && !systemPrompt.trim())} // Added null check for systemPrompt
+                                            className="save-system-prompt-button"
+                                        >
+                                            {isSystemPromptSaving ? 'Saving...' : 'Save to File'}
+                                        </button>
+                                        {systemPromptMessage && ( /* from useSystemPrompt */
+                                            <p className={`system-prompt-status ${systemPromptMessage.includes('Error') ? 'error' : 'success'}`}>
+                                                {systemPromptMessage}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="top-controls-right">
+                            <ModelSettings
+                                availableModels={availableModels} // from useModels
+                                selectedModelCallName={selectedModelCallName} // from useModels
+                                onModelChange={handleModelChange} // from useModels
+                                isLoadingModels={isLoadingModels} // from useModels
+                                currentCallStats={currentCallStats} // from useModels
+                                totalSessionStats={totalSessionStats} // from useModels
+                                isChatLoading={chatIsLoading} // App specific
+                            />
+                        </div>
+                    </div>
+                    
+                    {attachmentStatus && ( // from useRepomix
+                        <div className={`attachment-status ${attachmentStatus.includes('Failed') || attachmentStatus.includes('non-standard') ? 'warning' : 'success'}`}>
+                            {attachmentStatus}
+                        </div>
+                    )}
+
+                    {globalError && <div className="error-message main-error">{globalError}</div>}
+                    
+                    <ChatInterface
+                        history={chatHistory}
+                        onStartComparison={handleStartComparison}
+                        parsedRepomixData={parsedRepomixData} // from useRepomix
+                    />
+                    {chatIsLoading && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'user' && (
+                        <div className="loading-indicator">Thinking...</div>
+                    )}
+                    {/* Chat specific error is part of globalError now, or display separately if preferred */}
+
+                </div>
+                <InputArea
+                    onPromptSubmit={handlePromptSubmit}
+                    onFileAttach={handleManualFileAttach} // from useRepomix
+                    isLoading={anyLoading}
+                    attachedFileName={displayAttachedFileNameForInputArea}
+                />
+            </div>
+
+            {(parsedRepomixData || comparisonView) && isFullScreenView && (
+                <FileContentDisplay
+                    filePath={selectedFilePathForView} // from useRepomix
+                    content={selectedFileContentForView} // from useRepomix
+                    isLoading={isLoadingSelectedFileForView && !comparisonView} // from useRepomix
+                    comparisonData={comparisonView} // App specific UI state
+                    onCloseComparison={handleCloseComparison} // App specific UI state
+                />
+            )}
         </div>
-    );
+
+        <footer className="app-footer">
+            {/* Footer content */}
+        </footer>
+    </div>
+);
 }
 
 export default App;

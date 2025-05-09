@@ -18,6 +18,7 @@ import {
 import fileRoutes from './routes/fileRoutes';
 import repomixRoutes from './routes/repomixRoutes';
 import geminiRoutes from './routes/geminiRoutes';
+import { authenticateToken, AuthenticatedRequest } from './middleware/authMiddleware';
 
 const app = express();
 const port = process.env.PORT || 8003; // Use environment variable for port if available
@@ -32,10 +33,13 @@ app.use(cors(corsOptions));
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
-// Mount routers
-app.use('/api', fileRoutes); // All file routes under /api
-app.use('/api', repomixRoutes); // All repomix routes under /api
-app.use('/api', geminiRoutes); // All gemini routes under /api
+// Mount routers WITH authentication middleware
+// Note: You might want some routes to be public, adjust as needed.
+// For example, listing generated files might be public, but getting content might be protected.
+// Or, /api/gemini-config might be public.
+app.use('/api', authenticateToken, fileRoutes);
+app.use('/api', authenticateToken, repomixRoutes);
+app.use('/api', authenticateToken, geminiRoutes);
 
 
 // Basic Root Route

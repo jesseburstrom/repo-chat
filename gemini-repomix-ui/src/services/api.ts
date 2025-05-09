@@ -3,6 +3,7 @@
 import type { ChatMessage } from '../App'; // Assuming ChatMessage is in App.tsx, adjust if moved
 import type { ClientGeminiModelInfo } from '../ModelSettings'; // Adjust path if needed
 import type { RepoInfo } from '../RepoSelector'; // Adjust path if needed
+import { supabase } from '../supabaseClient'; // Import supabase client
 
 const API_PREFIX = import.meta.env.DEV ? '' : '/repochat'; // Your existing prefix logic
 
@@ -51,14 +52,26 @@ export interface GeminiApiResponse extends BaseResponse { // Exporting as App.ts
     modelUsed?: string;
 }
 
+// --- Helper function to get headers with Authorization token ---
+async function getAuthHeaders(): Promise<HeadersInit> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: HeadersInit = {
+        'Content-Type': 'application/json', // Default Content-Type for JSON APIs
+    };
+    if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+    return headers;
+}
+
 
 // --- API Service Functions ---
 
 export async function loadSystemPrompt(): Promise<LoadSystemPromptResponse> {
     try {
-        const response = await fetch(`${API_PREFIX}/api/load-system-prompt`);
+        const headers = await getAuthHeaders();
+        const response = await fetch(`${API_PREFIX}/api/load-system-prompt`, { headers });
         if (!response.ok) {
-            // Try to parse error from backend if possible, otherwise generic message
             let errorMsg = `HTTP error ${response.status}`;
             try {
                 const errData = await response.json();
@@ -74,9 +87,10 @@ export async function loadSystemPrompt(): Promise<LoadSystemPromptResponse> {
 
 export async function saveSystemPrompt(systemPrompt: string): Promise<SaveSystemPromptResponse> {
     try {
+        const headers = await getAuthHeaders();
         const response = await fetch(`${API_PREFIX}/api/save-system-prompt`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers, // Content-Type is included from getAuthHeaders
             body: JSON.stringify({ systemPrompt }),
         });
         if (!response.ok) {
@@ -92,7 +106,8 @@ export async function saveSystemPrompt(systemPrompt: string): Promise<SaveSystem
 
 export async function fetchGeminiConfig(): Promise<GeminiConfigResponse> {
     try {
-        const response = await fetch(`${API_PREFIX}/api/gemini-config`);
+        const headers = await getAuthHeaders();
+        const response = await fetch(`${API_PREFIX}/api/gemini-config`, { headers });
         if (!response.ok) {
             let errorMsg = `HTTP error ${response.status}`;
             try { const errData = await response.json(); errorMsg = errData.error || errorMsg; } catch (e) {/*ignore*/}
@@ -106,7 +121,8 @@ export async function fetchGeminiConfig(): Promise<GeminiConfigResponse> {
 
 export async function listGeneratedFiles(): Promise<ListGeneratedFilesResponse> {
     try {
-        const response = await fetch(`${API_PREFIX}/api/list-generated-files`);
+        const headers = await getAuthHeaders();
+        const response = await fetch(`${API_PREFIX}/api/list-generated-files`, { headers });
         if (!response.ok) {
             let errorMsg = `HTTP error ${response.status}`;
             try { const errData = await response.json(); errorMsg = errData.error || errorMsg; } catch (e) {/*ignore*/}
@@ -120,7 +136,8 @@ export async function listGeneratedFiles(): Promise<ListGeneratedFilesResponse> 
 
 export async function getFileContent(filename: string): Promise<GetFileContentResponse> {
     try {
-        const response = await fetch(`${API_PREFIX}/api/get-file-content/${encodeURIComponent(filename)}`);
+        const headers = await getAuthHeaders();
+        const response = await fetch(`${API_PREFIX}/api/get-file-content/${encodeURIComponent(filename)}`, { headers });
         if (!response.ok) {
             let errorMsg = `HTTP error ${response.status}`;
             try { const errData = await response.json(); errorMsg = errData.error || errorMsg; } catch (e) {/*ignore*/}
@@ -139,18 +156,17 @@ interface RunRepomixParams {
 }
 export async function runRepomix(params: RunRepomixParams): Promise<RunRepomixResponse> {
     try {
+        const headers = await getAuthHeaders();
         const response = await fetch(`${API_PREFIX}/api/run-repomix`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers, // Content-Type is included from getAuthHeaders
             body: JSON.stringify(params),
         });
-        // Repomix can take time, so HTTP status might be 200 even if repomix itself failed internally
-        // The backend structures the response with a `success` boolean.
         const result: RunRepomixResponse = await response.json();
-        if (!response.ok && !result.error) { // If HTTP fails and no specific error in JSON
+        if (!response.ok && !result.error) {
              return { ...result, success: false, error: result.error || `HTTP error ${response.status}` };
         }
-        return result; // Rely on success flag from backend
+        return result;
     } catch (err: any) {
         return { success: false, error: err.message || "Network error running Repomix." };
     }
@@ -164,16 +180,17 @@ interface CallGeminiParams {
 }
 export async function callGemini(params: CallGeminiParams): Promise<GeminiApiResponse> {
     try {
+        const headers = await getAuthHeaders();
         const response = await fetch(`${API_PREFIX}/api/call-gemini`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers, // Content-Type is included from getAuthHeaders
             body: JSON.stringify(params),
         });
-        const result: GeminiApiResponse = await response.json(); // Expect GeminiApiResponse structure
+        const result: GeminiApiResponse = await response.json();
         if (!response.ok && !result.error) {
              return { ...result, success: false, error: result.error || `API proxy error ${response.status}` };
         }
-        return result; // Rely on success flag from backend
+        return result;
     } catch (err: any) {
         return { success: false, error: err.message || "Network error calling Gemini." };
     }
