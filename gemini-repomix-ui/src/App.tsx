@@ -275,16 +275,13 @@ function App() {
     <div className={`app-container ${isFullScreenView ? 'full-screen-file-view' : ''}`}>
         <header className="app-header">
             {/* Modified Header Section for Auth Info and Logout */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                <h1>Gemini Repomix Assistant</h1>
-                {/* Conditionally render user info and logout button if user exists */}
-                {user && (
-                    <div>
-                        {user.email && <span style={{ marginRight: '15px', fontSize: '0.9em' }}>Logged in as: {user.email}</span>}
-                        <button onClick={signOut} style={{ padding: '8px 12px', fontSize: '0.9em', cursor: 'pointer' }}>Logout</button>
-                    </div>
-                )}
-            </div>
+                        <h1>Gemini Repomix Assistant</h1>
+            {user && (
+                <div className="user-info-logout-container">
+                    {user.email && <span className="user-email-display">Logged in as: {user.email}</span>}
+                    <button onClick={signOut} className="logout-button">Logout</button>
+                </div>
+            )}
             {/* End of Modified Header Section */}
 
             {(parsedRepomixData || comparisonView) && (

@@ -80,7 +80,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                         <div className="stat-line"><span>Input Tokens:</span> <span>{currentCallStats.inputTokens.toLocaleString()}</span></div>
                         <div className="stat-line"><span>Output Tokens:</span> <span>{currentCallStats.outputTokens.toLocaleString()}</span></div>
                         <div className="stat-line"><span>Total Tokens:</span> <span>{(currentCallStats.inputTokens + currentCallStats.outputTokens).toLocaleString()}</span></div>
-                        <div className="stat-line"><span>Est. Cost:</span> <span className="total-cost">${currentCallStats.totalCost.toFixed(6)}</span></div>
+                        <div className="stat-line"><span>Est. Cost:</span> <span className="total-cost">${currentCallStats.totalCost.toFixed(2)}</span></div>
                     </>
                 ) : (
                     <div className="stat-line"><span>No call data yet.</span></div>
@@ -90,7 +90,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 <div className="stat-line"><span>Total Input Tokens:</span> <span>{totalSessionStats.inputTokens.toLocaleString()}</span></div>
                 <div className="stat-line"><span>Total Output Tokens:</span> <span>{totalSessionStats.outputTokens.toLocaleString()}</span></div>
                 <div className="stat-line"><span>Grand Total Tokens:</span> <span>{(totalSessionStats.inputTokens + totalSessionStats.outputTokens).toLocaleString()}</span></div>
-                <div className="stat-line"><span>Est. Total Cost:</span> <span className="total-cost">${totalSessionStats.totalCost.toFixed(6)}</span></div>
+                <div className="stat-line"><span>Est. Total Cost:</span> <span className="total-cost">${totalSessionStats.totalCost.toFixed(2)}</span></div>
             </div>
         </div>
     );
