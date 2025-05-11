@@ -1,29 +1,35 @@
 // backend/src/config/appConfig.ts
 import * as path from 'path';
-
 import * as fs from 'fs';
 import { GEMINI_MODELS, DEFAULT_MODEL_CALL_NAME as DEFAULT_MODEL } from '../geminiModels';
-
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 export const SUPABASE_URL = process.env.SUPABASE_URL;
-export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY; // For initializing client
-// export const SUPABASE_JWT_SECRET = process.env.SUPABASE_JWT_SECRET; // JWT Secret for manual verification
+export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) { // SUPABASE_JWT_SECRET only if manually verifying
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.error("FATAL: Supabase URL or Anon Key not found in server environment variables.");
     // process.exit(1); // Consider if startup should fail
 }
+if (!SUPABASE_SERVICE_ROLE_KEY) {
+    console.warn("WARNING: Supabase Service Role Key not found. Some backend operations requiring admin privileges might fail.");
+}
 
-// Initialize Supabase client for backend (e.g., for token verification via getUser)
-// Use anon key here; service_role key is for bypassing RLS, which we don't need for just verifying a JWT.
+// Client for frontend-like operations (e.g., token verification via getUser)
 export const supabaseBackendClient = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+// Client for backend admin operations (bypasses RLS, use with caution)
+export const supabaseAdminClient: SupabaseClient | null = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) : null;
 
 export const GENERATED_FILES_DIR = path.resolve(__dirname, '..', '..', '..', 'generated_files');
 export const TEMP_FILENAME_PREFIX = 'temp_repomix_output';
+
+// --- ADD THESE MISSING CONSTANTS BACK ---
 export const MAIN_FILENAME_EXTENSION = '.md';
 export const SUMMARY_FILENAME_EXTENSION = '.txt';
 export const SUMMARY_FILENAME_SUFFIX = '_pack_summary';
+// --- END OF MISSING CONSTANTS ---
 
 export const SYSTEM_PROMPT_FILENAME = 'system_prompt.txt';
 export const SYSTEM_PROMPT_FULL_PATH = path.join(GENERATED_FILES_DIR, SYSTEM_PROMPT_FILENAME);

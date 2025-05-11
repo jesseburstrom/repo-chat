@@ -1,0 +1,134 @@
+/* gemini-repomix-ui/src/ApiKeyModal.css */
+.api-key-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.api-key-modal-content {
+    background-color: #fff;
+    padding: 25px 30px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 500px;
+    font-family: sans-serif;
+}
+
+.api-key-modal-content h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #333;
+    font-weight: 500;
+}
+
+.api-key-modal-content p {
+    margin-bottom: 15px;
+    font-size: 0.95em;
+    line-height: 1.6;
+    color: #555;
+}
+ .api-key-modal-content a {
+     color: #1a73e8;
+     text-decoration: none;
+ }
+ .api-key-modal-content a:hover {
+     text-decoration: underline;
+ }
+
+.api-key-modal-content .form-group {
+    margin-bottom: 20px;
+}
+
+.api-key-modal-content label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.9em;
+    color: #5f6368;
+    font-weight: 500;
+}
+
+.api-key-modal-content input[type="password"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #dadce0;
+    border-radius: 4px;
+    font-size: 1rem;
+    box-sizing: border-box;
+}
+.api-key-modal-content input[type="password"]:focus {
+    outline: none;
+    border-color: #1a73e8;
+    box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+}
+
+
+.modal-error {
+    color: #c5221f;
+    font-size: 0.9em;
+    margin-top: -10px;
+    margin-bottom: 15px;
+}
+.modal-success {
+    color: #137333;
+    font-size: 0.9em;
+    margin-top: -10px;
+    margin-bottom: 15px;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.modal-actions button {
+    padding: 9px 18px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.95em;
+    transition: background-color 0.2s ease;
+}
+
+.modal-actions button[type="submit"] {
+    background-color: #1a73e8;
+    color: white;
+}
+.modal-actions button[type="submit"]:hover:not(:disabled) {
+    background-color: #185abc;
+}
+
+.modal-actions button[type="button"] {
+    background-color: #e8eaed;
+    color: #3c4043;
+    border: 1px solid #dadce0;
+}
+.modal-actions button[type="button"]:hover:not(:disabled) {
+    background-color: #dadce0;
+}
+ .modal-actions button.delete-button {
+     background-color: #fce8e6;
+     color: #c5221f;
+     border: 1px solid #f4aca9;
+     margin-right: auto; /* Pushes to the left */
+ }
+ .modal-actions button.delete-button:hover:not(:disabled) {
+     background-color: #fAD0CC;
+ }
+
+
+.modal-actions button:disabled {
+    background-color: #ccc;
+    opacity: 0.7;
+    cursor: not-allowed;
+}
