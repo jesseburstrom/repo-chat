@@ -8,9 +8,10 @@ dotenv.config();
 
 import {
     GENERATED_FILES_DIR,
-    getCurrentModelCallName,
     // supabaseAdminClient // Not directly used here, but initialized in appConfig
 } from './config/appConfig';
+
+import { DEFAULT_MODEL_CALL_NAME } from './geminiModels';
 
 import fileRoutes from './routes/fileRoutes';
 import repomixRoutes from './routes/repomixRoutes';
@@ -60,6 +61,6 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 app.listen(port, () => {
     console.log(`Repomix server listening on http://localhost:${port}`);
     console.log(`Repomix output will be saved to: ${GENERATED_FILES_DIR}`);
-    console.log(`Default/Last selected Gemini model: ${getCurrentModelCallName()}`);
+    console.log(`Default Gemini model (fallback): ${DEFAULT_MODEL_CALL_NAME}`);
     // console.log(`Supabase Admin Client ${supabaseAdminClient ? 'initialized' : 'NOT initialized'}`);
 });

@@ -47,13 +47,13 @@ function App() {
     const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
     const [apiKeyStatusLoading, setApiKeyStatusLoading] = useState<boolean>(true); // Start true for initial check
 
-
     // --- Custom Hooks ---
     const {
         systemPrompt,
         setSystemPrompt,
         showSystemPromptInput,
         setShowSystemPromptInput,
+        isLoadingPrompt, // <-- Get loading state
         isSystemPromptSaving,
         systemPromptMessage,
         handleSaveSystemPrompt,
@@ -70,7 +70,7 @@ function App() {
         recordCallStats,
         resetCurrentCallStats,
         // updateGeminiConfig // if needed from useModels
-    } = useModels("gemini-2.5-pro-preview-05-06");
+    } = useModels(); // No initial model needed here, hook handles default/DB pref
 
     const {
         repoUrl,
@@ -106,46 +106,40 @@ function App() {
     // --- Effect for checking Gemini API Key status ---
     useEffect(() => {
         const checkApiKeyStatus = async () => {
-            if (session && user && !authIsLoading) { // Only check if authenticated and auth isn't loading
+            if (session && user && !authIsLoading) {
                 setApiKeyStatusLoading(true);
-                // console.log('[App] Checking API key status...');
                 const statusResult = await api.getGeminiApiKeyStatus();
                 if (statusResult.success) {
                     setUserHasGeminiKey(statusResult.hasKey ?? false);
-                    // console.log('[App] API key status:', statusResult.hasKey);
                     if (!statusResult.hasKey) {
-                        setShowApiKeyModal(true); // Prompt user if no key
+                        setShowApiKeyModal(true);
                     } else {
-                        setShowApiKeyModal(false); // Ensure modal is closed if key exists
+                        setShowApiKeyModal(false);
                     }
                 } else {
                     console.error("[App] Failed to get API key status:", statusResult.error);
-                    setChatError("Could not verify Gemini API key status. Chat features may be affected.");
-                    setUserHasGeminiKey(false); // Assume no key on error to be safe
-                    // setShowApiKeyModal(true); // Optionally prompt even on error to allow setting it
+                    setChatError("Could not verify Gemini API key status.");
+                    setUserHasGeminiKey(false);
                 }
                 setApiKeyStatusLoading(false);
             } else if (!session && !authIsLoading) {
-                 // If user logs out or session becomes invalid, reset key status
                  setUserHasGeminiKey(null);
                  setShowApiKeyModal(false);
-                 setApiKeyStatusLoading(false); // No longer loading key status if no session
+                 setApiKeyStatusLoading(false);
             }
-            // If authIsLoading is true, we wait for it to resolve before checking.
         };
         checkApiKeyStatus();
-    }, [session, user, authIsLoading]); // Re-check when session, user, or auth loading state changes
+    }, [session, user, authIsLoading]);
 
     const handleApiKeySubmitted = useCallback(() => {
-        // Re-check status after submission
         if (session && user && !authIsLoading) {
             setApiKeyStatusLoading(true);
             api.getGeminiApiKeyStatus().then(statusResult => {
                 if (statusResult.success) {
                     setUserHasGeminiKey(statusResult.hasKey ?? false);
                     if (statusResult.hasKey) {
-                        setShowApiKeyModal(false); // Close modal if key is now present
-                        setChatError(null); // Clear any previous API key related errors
+                        setShowApiKeyModal(false);
+                        setChatError(null);
                     }
                 }
                 setApiKeyStatusLoading(false);
@@ -155,7 +149,6 @@ function App() {
             });
         }
     }, [session, user, authIsLoading]);
-
 
     useEffect(() => {
         if (!parsedRepomixData && !comparisonView) {
@@ -185,25 +178,26 @@ function App() {
 
 
     const handlePromptSubmit = useCallback(async (prompt: string) => {
-        if (userHasGeminiKey === false) { // Explicitly check for false
-            setChatError("Gemini API Key is not set. Please set your API key to use chat features.");
-            setShowApiKeyModal(true);
-            return;
+        // --- Existing API Key checks ---
+        if (userHasGeminiKey === false) {
+            setChatError("Gemini API Key is not set. Please set your API key.");
+            setShowApiKeyModal(true); return;
         }
-        if (userHasGeminiKey === null && !apiKeyStatusLoading) { // If still unknown and not loading, implies an issue
+        if (userHasGeminiKey === null && !apiKeyStatusLoading) {
             setChatError("Could not verify API key status. Please try again or set your key.");
-            setShowApiKeyModal(true); // Prompt to set it
-            return;
+            setShowApiKeyModal(true); return;
         }
-
         if (!prompt && !parsedRepomixData && promptSelectedFilePaths.length === 0) {
             setChatError("Please type a prompt, attach a file, or select files from the tree.");
             return;
         }
+        // --- End API Key checks ---
+
         setChatIsLoading(true);
         setChatError(null);
         resetCurrentCallStats();
 
+        // --- Logic for including file context ---
         let filesToIncludeInPromptSegment = "";
         if (promptSelectedFilePaths.length > 0 && parsedRepomixData) {
             let selectedFilesContentParts: string[] = [];
@@ -219,7 +213,6 @@ function App() {
         }
         let contextContent = "";
         let contextDescriptor = "";
-
         if (filesToIncludeInPromptSegment) {
             contextContent = filesToIncludeInPromptSegment;
             contextDescriptor = `(Using ${promptSelectedFilePaths.length} selected files)`;
@@ -228,30 +221,33 @@ function App() {
         } else if (attachedFileName) {
             contextDescriptor = `(Regarding file: ${attachedFileName})`;
         }
-
         let combinedPromptForApi = "";
         if (contextContent) {
             combinedPromptForApi += `Context from selected repository files:\n${contextContent}\n\n`;
         }
         combinedPromptForApi += prompt ? `User Prompt: ${prompt}` : (contextDescriptor ? `User Prompt: Please analyze the ${contextDescriptor}.` : `User Prompt: Please analyze.`);
+        // --- End logic for including file context ---
 
         const userDisplayPrompt = prompt || contextDescriptor || "Analyze request";
         const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userDisplayPrompt }] };
         const historyForBackend: ChatMessage[] = chatHistory.slice(-MAX_HISTORY_TURNS * 2).map(msg => ({ role: msg.role, parts: msg.parts }));
         setChatHistory(prev => [...prev, newUserMessage]);
 
+        // --- MODIFIED API Call (systemPrompt removed) ---
         const result = await api.callGemini({
             history: historyForBackend,
             newMessage: combinedPromptForApi,
-            systemPrompt: systemPrompt,
-            modelCallName: selectedModelCallName,
+            // systemPrompt: systemPrompt, // <-- REMOVED
+            modelCallName: selectedModelCallName, // Send the UI's *current* selection
         });
+        // --- END MODIFICATION ---
 
+        // --- Handle API result ---
         if (result.success && result.text) {
             const newModelMessage: ChatMessage = { role: 'model', parts: [{ text: result.text }] };
             setChatHistory(prev => [...prev, newModelMessage]);
             if (result.inputTokens !== undefined && result.outputTokens !== undefined && result.totalCost !== undefined) {
-                recordCallStats({
+                recordCallStats({ // recordCallStats now handles potential model updates internally
                     inputTokens: result.inputTokens,
                     outputTokens: result.outputTokens,
                     totalTokens: (result.inputTokens || 0) + (result.outputTokens || 0),
@@ -268,16 +264,17 @@ function App() {
                 setUserHasGeminiKey(false);
                 setShowApiKeyModal(true);
             }
-            setChatHistory(prev => prev.slice(0, -1));
+            setChatHistory(prev => prev.slice(0, -1)); // Remove user message on failure
         }
         setChatIsLoading(false);
+        // --- End Handle API result ---
 
     }, [
-        chatHistory, systemPrompt, selectedModelCallName, recordCallStats, resetCurrentCallStats,
+        chatHistory, selectedModelCallName, recordCallStats, resetCurrentCallStats,
         parsedRepomixData, promptSelectedFilePaths, attachedFileName,
-        userHasGeminiKey, apiKeyStatusLoading // Add dependencies
+        userHasGeminiKey, apiKeyStatusLoading // <-- Dependencies
+        // systemPrompt removed from dependencies
     ]);
-
 
     const displayAttachedFileNameForInputArea = useMemo(() => {
         if (promptSelectedFilePaths.length > 0) {
@@ -291,33 +288,34 @@ function App() {
         return attachedFileName;
     }, [promptSelectedFilePaths, allFilePathsInCurrentRepomix, attachedFileName]);
 
+    // Include isLoadingPrompt in the general loading check
     const anyLoading = chatIsLoading || isGenerating || isLoadingFileContent || isLoadingModels ||
-                       isLoadingSelectedFileForView || isLoadingRepos || isSystemPromptSaving || apiKeyStatusLoading;
+                       isLoadingSelectedFileForView || isLoadingRepos || isSystemPromptSaving || apiKeyStatusLoading || isLoadingPrompt;
 
-    if (authIsLoading || (session && apiKeyStatusLoading && userHasGeminiKey === null) ) { // Show loading if auth is loading OR if session exists but API key status is still being checked
+    // --- Loading/Auth Checks ---
+    if (authIsLoading || (session && apiKeyStatusLoading && userHasGeminiKey === null) ) {
         return <div className="app-container" style={{ textAlign: 'center', paddingTop: '50px' }}>Loading application essentials...</div>;
     }
-
     if (!session || !user) {
         return <AuthForm />;
     }
+    // --- End Loading/Auth Checks ---
 
     return (
     <div className={`app-container ${isFullScreenView ? 'full-screen-file-view' : ''}`}>
         <ApiKeyModal
-            isOpen={showApiKeyModal && userHasGeminiKey === false && !apiKeyStatusLoading} // Only open if we know there's no key and not currently checking
+            isOpen={showApiKeyModal && userHasGeminiKey === false && !apiKeyStatusLoading}
             onClose={() => setShowApiKeyModal(false)}
             onKeySubmitted={handleApiKeySubmitted}
         />
-        {/* --- MODIFIED HEADER with Flexbox layout --- */}
+
         <header className="app-header">
             <h1 className="app-title">Gemini Repomix Assistant</h1>
-            
-            <div className="header-actions-right"> 
+            <div className="header-actions-right">
                 {userHasGeminiKey === false && !apiKeyStatusLoading && (
                     <button
                         onClick={() => setShowApiKeyModal(true)}
-                        className="header-action-button api-key-warning-button" 
+                        className="header-action-button api-key-warning-button"
                         title="Set your Gemini API Key"
                     >
                         ⚠️ Set API Key
@@ -330,16 +328,15 @@ function App() {
                 {(parsedRepomixData || comparisonView) && (
                     <button
                         onClick={toggleFullScreenView}
-                        className="header-action-button fullscreen-toggle-button" 
+                        className="header-action-button fullscreen-toggle-button"
                         title={isFullScreenView ? "Exit Full Screen View" : "Expand File View"}
-                        disabled={anyLoading && isFullScreenView} // Optionally disable if loading
+                        disabled={anyLoading && isFullScreenView}
                     >
                         {isFullScreenView ? '📰 Collapse' : '↔️ Expand'}
                     </button>
                 )}
             </div>
         </header>
-        {/* --- END OF MODIFIED HEADER --- */}
 
         <div className={`main-content-wrapper ${isFullScreenView ? 'full-screen-active' : ''}`}>
             {parsedRepomixData && isFullScreenView && !comparisonView && (
@@ -356,7 +353,7 @@ function App() {
 
             <div className="center-column">
                 <div className="scrollable-content-area">
-                    {userHasGeminiKey === false && !apiKeyStatusLoading && ( // Show only if we know there's no key
+                    {userHasGeminiKey === false && !apiKeyStatusLoading && (
                         <div className="error-message" style={{textAlign: 'center', marginBottom: '1rem', padding: '10px'}}>
                             Gemini API Key is not set. Chat functionality is disabled.
                             <button onClick={() => setShowApiKeyModal(true)} style={{marginLeft: '10px', padding: '5px 10px', cursor: 'pointer'}}>Set Key</button>
@@ -382,9 +379,10 @@ function App() {
                                 <button
                                     onClick={() => setShowSystemPromptInput(prev => !prev)}
                                     className="toggle-system-prompt-button"
-                                    disabled={isSystemPromptSaving}
+                                    disabled={isSystemPromptSaving || isLoadingPrompt} // <-- Disable while loading prompt
                                 >
-                                    {showSystemPromptInput ? 'Hide' : 'Set'} System Prompt (File)
+                                    {/* Updated button text based on loading state */}
+                                    {isLoadingPrompt ? 'Loading...' : (showSystemPromptInput ? 'Hide' : 'Set') + ' System Prompt'}
                                 </button>
                                 {showSystemPromptInput && (
                                     <div className="system-prompt-input-area">
@@ -393,14 +391,15 @@ function App() {
                                             onChange={(e) => setSystemPrompt(e.target.value)}
                                             rows={3}
                                             className="system-prompt-textarea"
-                                            disabled={isSystemPromptSaving}
+                                            disabled={isSystemPromptSaving || isLoadingPrompt} // <-- Disable while loading/saving
+                                            placeholder={isLoadingPrompt ? "Loading system prompt..." : "Enter system prompt (saved per user)..."}
                                         />
                                         <button
                                             onClick={handleSaveSystemPrompt}
-                                            disabled={isSystemPromptSaving || !systemPrompt?.trim()}
+                                            disabled={isSystemPromptSaving || isLoadingPrompt || !systemPrompt?.trim()} // <-- Disable while loading/saving
                                             className="save-system-prompt-button"
                                         >
-                                            {isSystemPromptSaving ? 'Saving...' : 'Save to File'}
+                                            {isSystemPromptSaving ? 'Saving...' : 'Save to DB'} {/* Changed label */}
                                         </button>
                                         {systemPromptMessage && (
                                             <p className={`system-prompt-status ${systemPromptMessage.includes('Error') ? 'error' : 'success'}`}>
@@ -419,7 +418,7 @@ function App() {
                                 isLoadingModels={isLoadingModels}
                                 currentCallStats={currentCallStats}
                                 totalSessionStats={totalSessionStats}
-                                isChatLoading={chatIsLoading}
+                                isChatLoading={chatIsLoading} // Pass chat loading state
                             />
                         </div>
                     </div>
@@ -444,7 +443,8 @@ function App() {
                 <InputArea
                     onPromptSubmit={handlePromptSubmit}
                     onFileAttach={handleManualFileAttach}
-                    isLoading={anyLoading || (userHasGeminiKey === false && !apiKeyStatusLoading)} // Also disable input if we know key is missing and not checking
+                    // Ensure all relevant loading states disable the input
+                    isLoading={anyLoading || (userHasGeminiKey === false && !apiKeyStatusLoading)}
                     attachedFileName={displayAttachedFileNameForInputArea}
                 />
             </div>
@@ -461,7 +461,7 @@ function App() {
         </div>
 
         <footer className="app-footer">
-            {/* Footer content */}
+            {/* Optional: Add footer content like version or links */}
         </footer>
     </div>
 );

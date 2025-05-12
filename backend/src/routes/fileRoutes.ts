@@ -8,7 +8,6 @@ import {
     MAIN_FILENAME_EXTENSION,
     SUMMARY_FILENAME_SUFFIX,
     SUMMARY_FILENAME_EXTENSION,
-    SYSTEM_PROMPT_FILENAME,
 } from '../config/appConfig';
 
 const router = express.Router();
@@ -51,7 +50,6 @@ router.get('/get-file-content/:filename', async (req: Request<{ filename: string
     const requestedFilename = req.params.filename;
     console.log(`Request received for /get-file-content/${requestedFilename}`);
 
-    const isSystemPromptFile = requestedFilename === SYSTEM_PROMPT_FILENAME;
     const safeFilenameRegex = /^[a-zA-Z0-9_.-]+(\.md|_pack_summary\.txt)$/;
     const resolvedPath = path.join(GENERATED_FILES_DIR, requestedFilename);
     const normalizedPath = path.normalize(resolvedPath);
@@ -60,9 +58,9 @@ router.get('/get-file-content/:filename', async (req: Request<{ filename: string
          res.status(400).json({ success: false, error: 'Invalid filename format.' });
          return;
     }
-    if (!isSystemPromptFile && !safeFilenameRegex.test(requestedFilename)) {
+    if (!safeFilenameRegex.test(requestedFilename)) {
         console.warn(`Filename does not match expected pattern: ${requestedFilename}`);
-        // Potentially an error, but depends on how client uses it. Assume valid for now if path resolves correctly.
+        res.status(400).json({ success: false, error: 'Invalid filename format. Only .md or _pack_summary.txt allowed.' });
     }
     if (!normalizedPath.startsWith(GENERATED_FILES_DIR)) {
         console.error(`Path traversal attempt detected: ${requestedFilename} resolved to ${normalizedPath}`);

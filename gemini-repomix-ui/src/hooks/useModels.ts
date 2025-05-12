@@ -3,15 +3,22 @@ import { useState, useEffect, useCallback } from 'react';
 import { fetchGeminiConfig as apiFetchGeminiConfig } from '../services/api';
 import type { ClientGeminiModelInfo, TokenStats } from '../ModelSettings';
 import { useAuth } from '../contexts/AuthContext';
+// It's better practice to import the default from a shared location if possible,
+// but importing from backend might be complex. Define it here or in a shared constants file.
+// For now, let's hardcode it as a fallback based on previous backend setup.
+const DEFAULT_MODEL_FALLBACK = "gemini-2.5-pro-preview-05-06";
 
-export function useModels(initialDefaultModelCallNameProp?: string) { // Renamed for clarity
+export function useModels(initialDefaultModelCallNameProp?: string) { // Keep prop as ultimate fallback
     const { session, isLoading: authIsLoading } = useAuth();
 
     const [availableModels, setAvailableModels] = useState<ClientGeminiModelInfo[]>([]);
-    const [selectedModelCallName, setSelectedModelCallName] = useState<string>(''); // Start empty or with prop
-    const [isLoadingModels, setIsLoadingModels] = useState<boolean>(false);
+    // Initialize with the prop or the hardcoded fallback, fetch will overwrite
+    const initialModel = initialDefaultModelCallNameProp || DEFAULT_MODEL_FALLBACK;
+    const [selectedModelCallName, setSelectedModelCallName] = useState<string>(initialModel);
+    const [isLoadingModels, setIsLoadingModels] = useState<boolean>(true); // Start true
     const [modelError, setModelError] = useState<string | null>(null);
-    const [isInitialModelLoadComplete, setIsInitialModelLoadComplete] = useState(false); // Track initial load
+    const [isInitialModelLoadDone, setIsInitialModelLoadDone] = useState(false);
+
 
     const [currentCallStats, setCurrentCallStats] = useState<TokenStats | null>(null);
     const [totalSessionStats, setTotalSessionStats] = useState<TokenStats>({
@@ -19,115 +26,100 @@ export function useModels(initialDefaultModelCallNameProp?: string) { // Renamed
         inputCost: 0, outputCost: 0, totalCost: 0,
     });
 
-    // This function is responsible for fetching models and determining the selection,
-    // especially on initial load or when a full refresh is needed.
     const loadAndSetModelsConfiguration = useCallback(async (isManualRefresh = false) => {
+        // If no session or still loading auth, wait or clear state.
         if (!session || authIsLoading) {
-            setAvailableModels([]);
-            setSelectedModelCallName(initialDefaultModelCallNameProp || '');
-            setIsLoadingModels(false);
-            setModelError(null);
-            if (!isManualRefresh) setIsInitialModelLoadComplete(false); // Reset if auth changes
-            return;
+             console.log('[useModels] Waiting for auth or no session.');
+             setAvailableModels([]);
+             setSelectedModelCallName(initialModel); // Reset to default if auth lost
+             setIsLoadingModels(!authIsLoading); // Stop loading if auth done and no session. If auth loading, keep loading.
+             setModelError(null);
+             setIsInitialModelLoadDone(false); // Reset initial load flag
+             return;
         }
 
-        // If it's not a manual refresh and the initial load is already done,
-        // we don't necessarily need to refetch unless other dependencies change.
-        // However, this function is now primarily for initial load or explicit refresh.
-        if (!isManualRefresh && isInitialModelLoadComplete) {
-             // console.log('[useModels] Initial load already complete, skipping auto-refetch of models config unless dependencies changed.');
-            // return; // This line might prevent updates if session/authIsLoading changes *after* initial load.
-                     // Let's allow it to run if session/authIsLoading changes.
-        }
+        // Avoid redundant fetches if initial load done and not manual refresh
+        // Re-enabled fetching on auth change even if initial load done previously.
+        // if (!isManualRefresh && isInitialModelLoadDone) {
+        //      console.log('[useModels] Initial load done, skipping auto-refetch.');
+        //      return;
+        // }
 
-
+        console.log(`[useModels] Fetching Gemini config (Auth complete: ${!!session}, Manual: ${isManualRefresh})`);
         setIsLoadingModels(true);
         setModelError(null);
-        // console.log(`[useModels] Fetching Gemini config. ManualRefresh: ${isManualRefresh}, InitialLoadDone: ${isInitialModelLoadComplete}`);
-        const result = await apiFetchGeminiConfig();
-        // console.log('[useModels] Fetched Gemini config result:', result);
+        const result = await apiFetchGeminiConfig(); // This now requires auth
+         console.log('[useModels] Fetched Gemini config result:', result);
 
         if (result.success) {
             const newAvailModels = result.models || [];
             setAvailableModels(newAvailModels);
 
-            let newSelectionCandidate = '';
+            // Select model: Backend's value (user pref or default) is the primary source now
+            const backendProvidedModel = result.currentModelCallName;
+            let modelToSet = initialModel; // Start with ultimate default
 
-            // Determine the model to select:
-            // 1. If it's a manual refresh OR initial load, prioritize backend's current model.
-            // 2. Otherwise (e.g., user changed selection, then auth changed), try to preserve valid user selection.
-            if (isManualRefresh || !isInitialModelLoadComplete) {
-                if (result.currentModelCallName && newAvailModels.find(m => m.callName === result.currentModelCallName)) {
-                    newSelectionCandidate = result.currentModelCallName;
-                }
+            if (backendProvidedModel && newAvailModels.find(m => m.callName === backendProvidedModel)) {
+                 modelToSet = backendProvidedModel;
+            } else if (newAvailModels.length > 0) {
+                 // Fallback if backend model is invalid/missing but models exist
+                 modelToSet = newAvailModels[0].callName;
             } else {
-                // Not a manual refresh and initial load was done. Try to keep current valid selection.
-                if (selectedModelCallName && newAvailModels.find(m => m.callName === selectedModelCallName)) {
-                    newSelectionCandidate = selectedModelCallName;
-                } else if (result.currentModelCallName && newAvailModels.find(m => m.callName === result.currentModelCallName)) {
-                    // Fallback to backend's if current local became invalid
-                    newSelectionCandidate = result.currentModelCallName;
-                }
+                // If no models available, stick to initialModel (fallback)
+                 console.warn('[useModels] No available models received from backend.');
+                 modelToSet = initialModel;
             }
-
-            // If still no candidate, pick first available or prop default
-            if (!newSelectionCandidate) {
-                if (newAvailModels.length > 0) {
-                    newSelectionCandidate = newAvailModels[0].callName;
-                } else {
-                    newSelectionCandidate = initialDefaultModelCallNameProp || '';
-                }
-            }
-            // console.log('[useModels] Setting selected model to:', newSelectionCandidate);
-            setSelectedModelCallName(newSelectionCandidate);
+             console.log(`[useModels] Setting selected model to: ${modelToSet} (Backend provided: ${backendProvidedModel})`);
+            setSelectedModelCallName(modelToSet);
 
         } else {
+            // Handle API call failure (e.g., auth error handled by api.ts, or other server issues)
             setModelError("Could not load AI model configurations. " + (result.error || "Unknown error."));
             setAvailableModels([]);
-            setSelectedModelCallName(initialDefaultModelCallNameProp || ''); // Reset on error
+            setSelectedModelCallName(initialModel); // Reset on error
         }
         setIsLoadingModels(false);
-        if (!isInitialModelLoadComplete) setIsInitialModelLoadComplete(true);
+         if (!isInitialModelLoadDone) setIsInitialModelLoadDone(true); // Mark initial load complete
 
-    // Removed selectedModelCallName from here to prevent re-fetch on user selection.
-    // It should refetch if session, authIsLoading, or the prop changes.
-    }, [session, authIsLoading, initialDefaultModelCallNameProp, isInitialModelLoadComplete, selectedModelCallName]); // Keeping selectedModelCallName for now to see if the internal logic handles it. Ideally, it would be removed.
-                                                                                                   // After testing, if the problem persists, REMOVING selectedModelCallName from this useCallback's deps is the next step.
+    // Dependencies: session status, auth loading status trigger the fetch
+    // initialModel is only a fallback value, not a trigger itself.
+    }, [session, authIsLoading, initialModel, isInitialModelLoadDone]); // isInitialModelLoadDone removed to allow fetch on auth change
 
     useEffect(() => {
-        // This effect runs on initial mount and when session/authIsLoading changes.
-        // It calls the function that loads models and sets the initial/default selection.
-        // console.log(`[useModels] Main useEffect triggered. InitialLoadComplete: ${isInitialModelLoadComplete}`);
-        loadAndSetModelsConfiguration(false); // false indicates it's not a manual refresh
-    }, [loadAndSetModelsConfiguration]); // Now depends on the memoized function
+         // This effect runs when auth state potentially changes.
+         // loadAndSetModelsConfiguration checks internally if fetch is needed.
+         loadAndSetModelsConfiguration(false); // Not a manual refresh
+    }, [loadAndSetModelsConfiguration]); // Depend only on the memoized function
 
 
     const handleModelChange = (newModelFromUI: string) => {
-        // console.log('[useModels] handleModelChange: User selected:', newModelFromUI);
-        // User explicitly changes the model. Just update the state.
-        // Do NOT trigger a refetch of the config here.
-        setSelectedModelCallName(newModelFromUI);
+         console.log('[useModels] UI selected model:', newModelFromUI);
+         // Just update local state. Backend updates DB after successful use.
+         setSelectedModelCallName(newModelFromUI);
+         // Clear current call stats when model is manually changed? Optional.
+         // resetCurrentCallStats();
     };
 
     const recordCallStats = (stats: TokenStats) => {
         setCurrentCallStats(stats);
-        setTotalSessionStats(prev => ({ /* ...your stats update logic... */
+        setTotalSessionStats(prev => ({
             inputTokens: prev.inputTokens + (stats.inputTokens || 0),
             outputTokens: prev.outputTokens + (stats.outputTokens || 0),
             totalTokens: prev.totalTokens + ((stats.inputTokens || 0) + (stats.outputTokens || 0)),
             inputCost: prev.inputCost + (stats.inputCost || 0),
             outputCost: prev.outputCost + (stats.outputCost || 0),
             totalCost: prev.totalCost + (stats.totalCost || 0),
-            modelUsed: prev.modelUsed // Or update if modelUsed in stats is different
+            modelUsed: stats.modelUsed || prev.modelUsed // Update if provided
         }));
 
-        // If the backend used a different model than selected, and it's valid, update local state.
-        if (stats.modelUsed && stats.modelUsed !== selectedModelCallName && availableModels.find(m => m.callName === stats.modelUsed)) {
-            // console.log(`[useModels] recordCallStats: Model used in API call (${stats.modelUsed}) differs from local. Updating local to ${stats.modelUsed}.`);
-            setSelectedModelCallName(stats.modelUsed);
-        }
+        // If backend used a *different* valid model than UI selection (e.g. user pref override request),
+        // update the UI selection to match what was actually used and saved by backend.
+         if (stats.modelUsed && stats.modelUsed !== selectedModelCallName && availableModels.find(m => m.callName === stats.modelUsed)) {
+             console.log(`[useModels] Model used in API call (${stats.modelUsed}) differs from local selection (${selectedModelCallName}). Updating UI selection.`);
+             setSelectedModelCallName(stats.modelUsed);
+         }
     };
-    
+
     const resetCurrentCallStats = () => setCurrentCallStats(null);
 
     return {
@@ -140,6 +132,7 @@ export function useModels(initialDefaultModelCallNameProp?: string) { // Renamed
         totalSessionStats,
         recordCallStats,
         resetCurrentCallStats,
-        updateGeminiConfig: () => loadAndSetModelsConfiguration(true) // Expose for manual refresh
+        // Expose manual refresh if needed by UI
+        updateGeminiConfig: () => loadAndSetModelsConfiguration(true),
     };
 }

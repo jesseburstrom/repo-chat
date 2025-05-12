@@ -1,28 +1,22 @@
 // backend/src/routes/geminiRoutes.ts
 import express, { Request, Response, NextFunction } from 'express';
-import * as fs from 'fs';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GenerationConfig, Content, FinishReason, SafetyRating, StartChatParams } from "@google/generative-ai";
-import { GEMINI_MODELS, calculateCost } from '../geminiModels';
+import { GEMINI_MODELS, calculateCost, DEFAULT_MODEL_CALL_NAME } from '../geminiModels'; // Import DEFAULT
+import { supabaseAdminClient } from '../config/appConfig';
+import { AuthenticatedRequest } from '../middleware/authMiddleware';
+// Import NEW service functions - ADDING getUserSystemPrompt
 import {
-    SYSTEM_PROMPT_FULL_PATH,
-    saveLastSelectedModel as persistSelectedModel,
-    getCurrentModelCallName,
-    GEMINI_CONFIG_PATH,
-    supabaseAdminClient // Import admin client
-} from '../config/appConfig';
-import { AuthenticatedRequest } from '../middleware/authMiddleware'; // Import AuthenticatedRequest
-import { getUserGeminiApiKey } from '../services/userApiKeyService'; // Import service
+    getUserConfig, // Combined getter
+    setUserLastSelectedModel, // Specific setter
+    setUserSystemPrompt, // Specific setter
+    getUserSystemPrompt, // <-- IMPORT THIS
+    getUserGeminiApiKey // Keep specific getter for clarity in /call-gemini if preferred
+} from '../services/userApiKeyService';
 
 const router = express.Router();
 
-// Remove or comment out global GEMINI_API_KEY and genAI instance
-// const geminiApiKey_global: string | undefined = process.env.GEMINI_API_KEY;
-// if (!geminiApiKey_global) {
-//   console.warn("WARNING: Global GEMINI_API_KEY not found. User-specific keys are required for Gemini calls.");
-// }
-// const genAI_global = geminiApiKey_global ? new GoogleGenerativeAI(geminiApiKey_global) : null;
-
-const generationConfig: GenerationConfig = { /* ... your config ... */ };
+// Global genAI removed as keys are user-specific
+const generationConfig: GenerationConfig = { temperature: 0.7 /* your config */ };
 
 interface SaveSystemPromptBody {
     systemPrompt: string;
@@ -31,8 +25,8 @@ interface SaveSystemPromptBody {
 interface CallGeminiRequestBody {
     history: Content[];
     newMessage: string;
-    systemPrompt?: string;
-    modelCallName?: string;
+    // systemPrompt is no longer sent from client, fetched on backend
+    modelCallName?: string; // Client can still suggest a model for this *one* call
 }
 
 interface GeminiApiResponse {
@@ -48,96 +42,98 @@ interface GeminiApiResponse {
     modelUsed?: string;
 }
 
-router.get('/gemini-config', (req: Request, res: Response) => {
-    const clientSafeModels = GEMINI_MODELS.map(m => ({
-        displayName: m.displayName,
-        callName: m.callName,
-        capabilities: m.capabilities,
-        notes: m.notes,
-    }));
-    res.status(200).json({
-        success: true,
-        models: clientSafeModels,
-        currentModelCallName: getCurrentModelCallName(),
-    });
+// --- GET /gemini-config (Requires Auth) --- FIX SIGNATURE & RETURNS
+router.get('/gemini-config', async (
+    req: AuthenticatedRequest,
+    res: Response,
+    next: NextFunction
+): Promise<void> => { // <-- ADD Promise<void>
+    const userId = req.user?.id;
+    if (!userId || !supabaseAdminClient) {
+        res.status(403).json({ success: false, error: 'User not authenticated or server misconfigured.' });
+        return; // <-- Add explicit return
+    }
+
+    try {
+        // Fetch user's config (including last model)
+        const userConfig = await getUserConfig(userId, supabaseAdminClient);
+
+        const clientSafeModels = GEMINI_MODELS.map(m => ({
+            displayName: m.displayName, callName: m.callName,
+            capabilities: m.capabilities, notes: m.notes,
+        }));
+
+        // Determine the current model: user's preference, or default
+        const currentModel = (userConfig.lastSelectedModel && GEMINI_MODELS.some(m => m.callName === userConfig.lastSelectedModel))
+            ? userConfig.lastSelectedModel
+            : DEFAULT_MODEL_CALL_NAME;
+
+        res.status(200).json({
+            success: true,
+            models: clientSafeModels,
+            currentModelCallName: currentModel, // Return user's last used or default
+        });
+        return; // <-- Add explicit return
+    } catch (error) {
+        next(error);
+        return; // <-- Add explicit return
+    }
 });
 
+// --- POST /call-gemini (Requires Auth) --- (Looks OK, signature is already Promise<void>)
 router.post('/call-gemini', async (
-    req: AuthenticatedRequest, // Use AuthenticatedRequest
+    req: AuthenticatedRequest,
     res: Response<GeminiApiResponse>,
     next: NextFunction
 ): Promise<void> => {
-    const { history, newMessage, systemPrompt, modelCallName: requestedModelCallName } = req.body as CallGeminiRequestBody;
+    const { history, newMessage, modelCallName: requestedModelCallName } = req.body as CallGeminiRequestBody;
     const userId = req.user?.id;
 
-    if (!userId) {
-        res.status(403).json({ success: false, error: 'User not authenticated.' });
-        return;
+    if (!userId || !supabaseAdminClient) {
+         res.status(403).json({ success: false, error: 'User not authenticated or server misconfigured.' });
+         return;
     }
-    if (!supabaseAdminClient) {
-         res.status(500).json({ success: false, error: 'Server configuration error (admin client for API key).' });
+    if (!newMessage || !Array.isArray(history)) {
+         res.status(400).json({ success: false, error: 'Invalid request body.' });
          return;
     }
 
-    if (!newMessage) {
-        res.status(400).json({ success: false, error: 'newMessage is required.' });
-        return;
-    }
-    if (!Array.isArray(history)) {
-        res.status(400).json({ success: false, error: 'history must be an array.' });
-        return;
-    }
+    let userApiKey: string | null = null;
+    let userSystemPrompt: string | null = null;
+    let userLastSelectedModel: string | null = null;
 
-    let userGeminiApiKey: string | null = null;
     try {
-        userGeminiApiKey = await getUserGeminiApiKey(userId, supabaseAdminClient);
+        const config = await getUserConfig(userId, supabaseAdminClient);
+        userApiKey = config.apiKey;
+        userSystemPrompt = config.systemPrompt;
+        userLastSelectedModel = config.lastSelectedModel;
     } catch (e) {
-        console.error("Error fetching user's Gemini API key during /call-gemini:", e);
-        res.status(500).json({ success: false, error: "Failed to retrieve API key." });
+        console.error(`Error fetching user config/key/prompt for user ${userId}:`, e);
+        res.status(500).json({ success: false, error: "Failed to retrieve user configuration." });
         return;
     }
 
-    if (!userGeminiApiKey) {
-        // Fallback to global key IF it's configured and you want this behavior
-        // if (geminiApiKey_global) {
-        //     userGeminiApiKey = geminiApiKey_global;
-        //     console.warn(`User ${userId} does not have a Gemini API key. Using global fallback.`);
-        // } else {
-        res.status(402).json({ // 402 Payment Required is a common status for missing API keys/quotas
-            success: false,
-            error: 'Gemini API key not configured for this user. Please set your API key in settings.'
-        });
+    if (!userApiKey) {
+        res.status(402).json({ success: false, error: 'Gemini API key not configured for this user.' });
         return;
-        // }
     }
 
-    // Initialize GoogleGenerativeAI with the user's key for this specific call
-    const genAI_userSpecific = new GoogleGenerativeAI(userGeminiApiKey);
+    const genAI_userSpecific = new GoogleGenerativeAI(userApiKey);
 
-    const modelToUse = requestedModelCallName && GEMINI_MODELS.some(m => m.callName === requestedModelCallName)
+    const modelToUse = (requestedModelCallName && GEMINI_MODELS.some(m => m.callName === requestedModelCallName))
         ? requestedModelCallName
-        : getCurrentModelCallName();
+        : (userLastSelectedModel && GEMINI_MODELS.some(m => m.callName === userLastSelectedModel))
+            ? userLastSelectedModel
+            : DEFAULT_MODEL_CALL_NAME;
 
-    console.log(`Received Gemini request for user ${userId}. Model: ${modelToUse}, History length: ${history.length}`);
-    let effectiveSystemInstruction = systemPrompt;
+    console.log(`Gemini request for user ${userId}. Model to use: ${modelToUse}. History: ${history.length}`);
 
-    if (!effectiveSystemInstruction && fs.existsSync(SYSTEM_PROMPT_FULL_PATH)) {
-        try {
-            effectiveSystemInstruction = await fs.promises.readFile(SYSTEM_PROMPT_FULL_PATH, 'utf-8');
-            console.log("Loaded system instruction from file for Gemini API call.");
-        } catch (err) {
-            console.warn("Could not load system_prompt.txt for Gemini API call, proceeding without it.", err);
-        }
-    }
-    if (effectiveSystemInstruction) console.log("Effective System Instruction for Gemini API. Length:", effectiveSystemInstruction.length);
-    console.log("New message:", newMessage.substring(0, 50) + "...");
+    const effectiveSystemInstruction = userSystemPrompt;
+    if (effectiveSystemInstruction) console.log("Using system instruction from DB. Length:", effectiveSystemInstruction.length);
+    else console.log("No system instruction found in DB for user.");
 
     try {
-        const modelOptions: {
-            model: string;
-            generationConfig: GenerationConfig;
-            systemInstruction?: string | Content;
-        } = {
+        const modelOptions: { model: string; generationConfig: GenerationConfig; systemInstruction?: string | Content; } = {
             model: modelToUse,
             generationConfig,
         };
@@ -145,130 +141,139 @@ router.post('/call-gemini', async (
             modelOptions.systemInstruction = effectiveSystemInstruction;
         }
 
-        // Use the user-specific genAI instance
         const dynamicModel = genAI_userSpecific.getGenerativeModel(modelOptions);
-        const startChatParams: StartChatParams = { history };
-        const chatSession = dynamicModel.startChat(startChatParams);
+        const chatSession = dynamicModel.startChat({ history });
         const result = await chatSession.sendMessage(newMessage);
         const response = result.response;
 
         if (response.promptFeedback?.blockReason) {
-            const reason = response.promptFeedback.blockReason;
-            const safetyRatings = response.promptFeedback.safetyRatings; // Get the ratings for logging if needed
-
-            // Log the detailed safety ratings if available and a block occurred
-            if (safetyRatings && safetyRatings.length > 0) {
-                console.warn(`Gemini API call blocked for reason: ${reason}. Detailed safety ratings:`, JSON.stringify(safetyRatings));
-            } else {
-                console.warn(`Gemini API call blocked for reason: ${reason}. No detailed safety ratings provided.`);
-            }
-
-            // Check if the block reason implies an API key issue or generic failure
-            // The `reason === 'OTHER'` check combined with an empty response is a heuristic
-            if (reason === 'OTHER' && response.text() === undefined && result.response.candidates === undefined) {
-                 console.error(`Gemini API call might have failed due to API key issue for user ${userId}. Block reason: ${reason}`);
-                 res.status(403).json({ success: false, error: `API call failed. Potentially an issue with the configured API key: ${reason}` });
-                 return;
-            }
-
-            // For all other block reasons, or if the above heuristic doesn't match:
-            res.status(400).json({ success: false, error: `Prompt blocked by safety filter: ${reason}` });
-            return;
+             const reason = response.promptFeedback.blockReason;
+             console.warn(`Gemini API call blocked for reason: ${reason}. User: ${userId}`);
+             if (reason === 'OTHER' && response.text() === undefined && result.response.candidates === undefined) {
+                  res.status(403).json({ success: false, error: `API call failed. Potential API Key issue: ${reason}` });
+             } else {
+                  res.status(400).json({ success: false, error: `Prompt blocked by safety filter: ${reason}` });
+             }
+             return;
         }
-
-        const candidates = response.candidates;
-        if (!candidates || candidates.length === 0) {
-            res.status(500).json({ success: false, error: 'Gemini API returned no response candidates.' });
-            return;
+        if (!response.candidates || response.candidates.length === 0) {
+             res.status(500).json({ success: false, error: 'Gemini API returned no response candidates.' }); return;
         }
-        const firstCandidate = candidates[0];
+         const firstCandidate = response.candidates[0];
         if (firstCandidate.finishReason && firstCandidate.finishReason !== FinishReason.STOP) {
-            res.status(400).json({ success: false, error: `Response stopped due to ${firstCandidate.finishReason}` });
-            return;
+            res.status(400).json({ success: false, error: `Response stopped due to ${firstCandidate.finishReason}` }); return;
         }
         if (!firstCandidate.content?.parts || firstCandidate.content.parts.length === 0 || !firstCandidate.content.parts.some(p => p.text)) {
-            res.status(500).json({ success: false, error: 'Gemini API returned no text content.' });
-            return;
+             res.status(500).json({ success: false, error: 'Gemini API returned no text content.' }); return;
         }
+
         const responseText = response.text();
         let inputTokens = 0, outputTokens = 0;
-        if (response.usageMetadata) {
-            inputTokens = response.usageMetadata.promptTokenCount || 0;
-            outputTokens = response.usageMetadata.candidatesTokenCount || 0;
-        } else {
-            try {
-                const promptTokenCountResult = await dynamicModel.countTokens(newMessage);
-                inputTokens = promptTokenCountResult.totalTokens;
-                const responseTokenCountResult = await dynamicModel.countTokens(responseText);
-                outputTokens = responseTokenCountResult.totalTokens;
-                console.warn(`Used manual token counting for ${modelToUse}. Input: ${inputTokens}, Output: ${outputTokens}.`);
-            } catch (countError: any) {
-                 console.error("Error counting tokens manually:", countError);
-                 // If counting fails, it might be an API key issue (e.g., invalid key used for counting)
-                 // This error often presents as "API key not valid" or similar.
-                 if (countError.message && (countError.message.includes("API_KEY") || countError.message.includes("PERMISSION_DENIED"))){
-                     res.status(403).json({ success: false, error: `Token counting failed. Please check if your Gemini API key is valid and has billing enabled: ${countError.message}` });
-                     return;
-                 }
-            }
-        }
+
+         if (response.usageMetadata) {
+             inputTokens = response.usageMetadata.promptTokenCount || 0;
+             outputTokens = response.usageMetadata.candidatesTokenCount || 0;
+         } else {
+             try {
+                 const promptTokenCountResult = await dynamicModel.countTokens(newMessage); inputTokens = promptTokenCountResult.totalTokens;
+                 const responseTokenCountResult = await dynamicModel.countTokens(responseText); outputTokens = responseTokenCountResult.totalTokens;
+                 console.warn(`Used manual token counting for ${modelToUse}. Input: ${inputTokens}, Output: ${outputTokens}.`);
+             } catch (countError: any) {
+                  console.error("Error counting tokens manually:", countError);
+                  if (countError.message?.includes("API_KEY") || countError.message?.includes("PERMISSION_DENIED")) {
+                      res.status(403).json({ success: false, error: `Token counting failed. Check API key/billing: ${countError.message}` }); return;
+                  }
+             }
+         }
+
         const { inputCost, outputCost, totalCost } = calculateCost(modelToUse, inputTokens, outputTokens);
 
-        if (modelToUse !== getCurrentModelCallName() || (requestedModelCallName && requestedModelCallName === modelToUse && !fs.existsSync(GEMINI_CONFIG_PATH)) ) {
-            persistSelectedModel(modelToUse);
+        if (modelToUse !== userLastSelectedModel) {
+            console.log(`Updating user ${userId}'s last selected model in DB to: ${modelToUse}`);
+            // Use await, but maybe don't block the response if it fails, just log it
+            setUserLastSelectedModel(userId, modelToUse, supabaseAdminClient)
+                .catch(err => console.error(`Failed to update last selected model in DB for user ${userId}:`, err));
         }
 
         res.status(200).json({
             success: true, text: responseText, inputTokens, outputTokens,
             totalTokens: inputTokens + outputTokens, inputCost, outputCost, totalCost, modelUsed: modelToUse,
         });
+        // No explicit return needed here as it's the end of the try block and function
 
     } catch (error: any) {
         console.error(`Error calling Gemini API on server for user ${userId} with model ${modelToUse}:`, error);
-        // Specific check for API key related errors from Google's SDK
-        if (error.message && (error.message.includes("API_KEY_INVALID") || error.message.includes("PERMISSION_DENIED") || error.message.includes("API key not valid"))) {
-            res.status(403).json({ success: false, error: `Gemini API Key Error: ${error.message}. Please check your key and ensure billing is enabled for your Google Cloud project.` });
-        } else {
-            next(error);
-        }
+         if (error.message?.includes("API_KEY_INVALID") || error.message?.includes("PERMISSION_DENIED") || error.message?.includes("API key not valid")) {
+             res.status(403).json({ success: false, error: `Gemini API Key Error: ${error.message}. Check key/billing.` });
+             // No return needed here because res.status().json() sends the response
+         } else {
+             next(error); // Pass to global error handler
+             // No explicit return needed here as next() passes control
+         }
     }
 });
 
-router.get('/load-system-prompt', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    // ... (this route remains unchanged)
-     console.log(`Request received for /load-system-prompt`);
-     try {
-         if (fs.existsSync(SYSTEM_PROMPT_FULL_PATH)) {
-             const promptContent = await fs.promises.readFile(SYSTEM_PROMPT_FULL_PATH, 'utf-8');
-             res.status(200).json({ success: true, systemPrompt: promptContent });
-         } else {
-             res.status(200).json({ success: true, systemPrompt: '' }); // File not found, return empty
-         }
-     } catch (error: any) {
-         console.error("Error loading system prompt from file:", error);
-         res.status(500).json({ success: false, error: "Could not load system prompt from file." });
-     }
-});
-
-router.post('/save-system-prompt', async (
-    req: Request<{}, {}, SaveSystemPromptBody>,
+// --- GET /load-system-prompt (Requires Auth) --- FIX RETURNS and ERROR HANDLING
+router.get('/load-system-prompt', async (
+    req: AuthenticatedRequest,
     res: Response,
     next: NextFunction
-): Promise<void> => {
-    // ... (this route remains unchanged)
-     const { systemPrompt } = req.body;
-     console.log(`Request received for /save-system-prompt (file). Length: ${systemPrompt?.length}`);
-     if (typeof systemPrompt !== 'string') {
-         res.status(400).json({ success: false, error: 'systemPrompt (string) is required in the body.' });
-         return;
-     }
-     try {
-         await fs.promises.writeFile(SYSTEM_PROMPT_FULL_PATH, systemPrompt, 'utf-8');
-         res.status(200).json({ success: true, message: 'System prompt saved to file.' });
-     } catch (error: any) {
-         console.error("Error saving system prompt to file:", error);
-         res.status(500).json({ success: false, error: 'Could not save system prompt to file.' });
-     }
+): Promise<void> => { // Signature already includes Promise<void>
+    const userId = req.user?.id;
+    if (!userId || !supabaseAdminClient) {
+        res.status(403).json({ success: false, error: 'User not authenticated or server misconfigured.' });
+        return; // <-- OK
+    }
+    console.log(`Request received for /load-system-prompt for user ${userId}`);
+    try {
+        // Now that getUserSystemPrompt is imported, this line should work
+        const promptContent = await getUserSystemPrompt(userId, supabaseAdminClient);
+        res.status(200).json({ success: true, systemPrompt: promptContent || '' }); // Return empty string if null
+        return; // <-- Add explicit return
+    } catch (error: any) {
+        console.error(`Error loading system prompt from DB for user ${userId}:`, error);
+        // Prefer using next(error) for consistency
+        // res.status(500).json({ success: false, error: "Could not load system prompt from database." });
+        next(new Error("Could not load system prompt from database.")); // Pass error to global handler
+        return; // <-- Add explicit return
+    }
+});
+
+// --- POST /save-system-prompt (Requires Auth) --- FIX RETURNS and ERROR HANDLING
+router.post('/save-system-prompt', async (
+    req: AuthenticatedRequest, // Use AuthenticatedRequest
+    res: Response,
+    next: NextFunction
+): Promise<void> => { // Signature already includes Promise<void>
+    const { systemPrompt } = req.body as SaveSystemPromptBody;
+    const userId = req.user?.id; // Get user ID from authenticated request
+
+    if (!userId || !supabaseAdminClient) {
+         res.status(403).json({ success: false, error: 'User not authenticated or server misconfigured.' });
+         return; // <-- OK
+    }
+    console.log(`Request received for /save-system-prompt (DB) for user ${userId}. Length: ${systemPrompt?.length}`);
+    if (typeof systemPrompt !== 'string') {
+        res.status(400).json({ success: false, error: 'systemPrompt (string) is required in the body.' });
+        return; // <-- OK
+    }
+    try {
+        const result = await setUserSystemPrompt(userId, systemPrompt, supabaseAdminClient);
+        if (result.success) {
+            res.status(200).json({ success: true, message: 'System prompt saved to database.' });
+        } else {
+            // Use next(error) for consistency if the service returns an error message
+            next(new Error(result.error || 'Could not save system prompt to database.'));
+            // res.status(500).json({ success: false, error: result.error || 'Could not save system prompt to database.' });
+        }
+        return; // <-- Add explicit return
+    } catch (error: any) {
+        console.error(`Error saving system prompt to DB for user ${userId}:`, error);
+        // Pass error to global handler
+        next(error);
+        // res.status(500).json({ success: false, error: 'Could not save system prompt to database.' });
+        return; // <-- Add explicit return
+    }
 });
 
 export default router;
