@@ -309,35 +309,37 @@ function App() {
             onClose={() => setShowApiKeyModal(false)}
             onKeySubmitted={handleApiKeySubmitted}
         />
+        {/* --- MODIFIED HEADER with Flexbox layout --- */}
         <header className="app-header">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                <h1>Gemini Repomix Assistant</h1>
+            <h1 className="app-title">Gemini Repomix Assistant</h1>
+            
+            <div className="header-actions-right"> 
+                {userHasGeminiKey === false && !apiKeyStatusLoading && (
+                    <button
+                        onClick={() => setShowApiKeyModal(true)}
+                        className="header-action-button api-key-warning-button" 
+                        title="Set your Gemini API Key"
+                    >
+                        ⚠️ Set API Key
+                    </button>
+                )}
+                {user && user.email && <span className="user-email-display">{user.email}</span>}
                 {user && (
-                    <div style={{display: 'flex', alignItems: 'center', gap: '15px'}}>
-                        {userHasGeminiKey === false && !apiKeyStatusLoading && (
-                            <button
-                                onClick={() => setShowApiKeyModal(true)}
-                                style={{ padding: '6px 10px', fontSize: '0.85em', cursor: 'pointer', backgroundColor: '#fff3cd', color: '#664d03', border: '1px solid #ffecb5', borderRadius: '4px' }}
-                                title="Set your Gemini API Key"
-                            >
-                                ⚠️ Set API Key
-                            </button>
-                        )}
-                        {user.email && <span style={{ fontSize: '0.9em' }}>{user.email}</span>}
-                        <button onClick={signOut} style={{ padding: '8px 12px', fontSize: '0.9em', cursor: 'pointer', border: '1px solid #ccc', background: '#f0f0f0', borderRadius: '4px' }}>Logout</button>
-                    </div>
+                    <button onClick={signOut} className="header-action-button logout-button">Logout</button>
+                )}
+                {(parsedRepomixData || comparisonView) && (
+                    <button
+                        onClick={toggleFullScreenView}
+                        className="header-action-button fullscreen-toggle-button" 
+                        title={isFullScreenView ? "Exit Full Screen View" : "Expand File View"}
+                        disabled={anyLoading && isFullScreenView} // Optionally disable if loading
+                    >
+                        {isFullScreenView ? '📰 Collapse' : '↔️ Expand'}
+                    </button>
                 )}
             </div>
-            {(parsedRepomixData || comparisonView) && (
-                <button
-                    onClick={toggleFullScreenView}
-                    className="fullscreen-toggle-button"
-                    title={isFullScreenView ? "Exit Full Screen View" : "Expand File View"}
-                >
-                    {isFullScreenView ? '📰 Collapse' : '↔️ Expand'}
-                </button>
-            )}
         </header>
+        {/* --- END OF MODIFIED HEADER --- */}
 
         <div className={`main-content-wrapper ${isFullScreenView ? 'full-screen-active' : ''}`}>
             {parsedRepomixData && isFullScreenView && !comparisonView && (

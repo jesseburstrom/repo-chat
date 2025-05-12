@@ -67,86 +67,90 @@ html, body, #root {
   height: 100%;
 }
 
-/* Header Styling */
+/* --- NEW Flexbox Header Styling --- */
 .app-header {
-   padding: 0 30px; /* Horizontal padding */
-   height: 70px; /* Slightly taller header */
+   padding: 0 30px;
+   height: 70px;
    border-bottom: 1px solid #e7eaf3;
    background-color: #fff;
-   text-align: center;
    flex-shrink: 0;
-   position: relative;
-   display: flex;
-   align-items: center;
-   justify-content: center;
+   display: flex; /* Use flexbox */
+   align-items: center; /* Vertically center items */
+   justify-content: space-between; /* Push title left, actions right */
 }
 
-.app-header h1 {
-   font-size: 1.5em; /* Main title size */
-   font-weight: 600; /* Bolder */
-   color: #2c3e50; /* Dark, neutral blue/grey */
-   margin: 0;
+.app-title {
+   font-size: 1.5em;
+   font-weight: 600;
+   color: #2c3e50;
+   margin: 0; /* Remove default margins */
 }
 
-.fullscreen-toggle-button {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  right: 30px; /* Adjusted padding */
-  padding: 6px 12px;
-  font-size: 0.875em;
-  background-color: #f0f2f5;
-  border: 1px solid #d9dce3;
-  border-radius: 6px;
-  color: #555;
-  cursor: pointer;
-  z-index: 10;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-.fullscreen-toggle-button:hover {
-  background-color: #e7eaf3;
-  border-color: #c8cdd8;
+.header-actions-right { /* Container for right-aligned items */
+    display: flex;
+    align-items: center;
+    gap: 15px; /* Space between items in the actions group */
 }
 
-.user-info-logout-container {
-  display: flex;
-  align-items: center;
-  gap: 18px; /* More space */
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  right: 130px; /* Ensure enough space: 30px (header padding) + fullscreen_btn_width (est. 90px) + gap (10px) */
-  z-index: 11;
+/* Common style for items directly inside the actions group */
+.header-actions-right > * {
+    white-space: nowrap; /* Prevent wrapping */
 }
 
 .user-email-display {
   font-size: 0.85em;
-  color: #5a6e87; /* Softer color */
-  font-style: normal; /* Removing italic for cleaner look */
+  color: #5a6e87;
 }
 
-.logout-button {
-  padding: 6px 14px;
-  font-size: 0.875em;
-  font-weight: 500;
-  color: #e74c3c; /* Slightly brighter red */
-  background-color: transparent;
-  border: 1px solid #f5b7b1; /* Lighter red border */
-  border-radius: 6px; /* Consistent radius */
-  cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+/* Base button style for header actions */
+.header-action-button {
+    padding: 6px 12px;
+    font-size: 0.875em;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid #d9dce3; /* Default border */
+    background-color: #f0f2f5; /* Default background */
+    color: #333; /* Default text color */
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    line-height: 1.4; /* Ensure consistent vertical alignment */
 }
-.logout-button:hover {
-  background-color: #fdedec; /* Very light red on hover */
+.header-action-button:hover:not(:disabled) {
+    background-color: #e7eaf3;
+    border-color: #c8cdd8;
+}
+.header-action-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Specific button styles (overrides/additions) */
+.logout-button {
+  color: #e74c3c;
+  background-color: transparent;
+  border-color: #f5b7b1;
+}
+.logout-button:hover:not(:disabled) {
+  background-color: #fdedec;
   color: #cb4335;
   border-color: #f1948a;
 }
-.logout-button:disabled {
-  color: #bdc3c7;
-  border-color: #e0e0e0;
-  background-color: #f8f9fa;
-  cursor: not-allowed;
+
+.api-key-warning-button {
+    background-color: #fff3cd;
+    color: #664d03;
+    border-color: #ffecb5;
 }
+.api-key-warning-button:hover:not(:disabled) {
+    background-color: #ffeeba;
+    border-color: #ffda6a;
+}
+
+.fullscreen-toggle-button {
+  /* Inherits .header-action-button styles */
+  /* No absolute positioning needed */
+}
+/* --- End of NEW Flexbox Header Styling --- */
+
 
 /* Main Content Layout */
 .main-content-wrapper {
