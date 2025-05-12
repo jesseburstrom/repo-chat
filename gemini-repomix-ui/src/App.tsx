@@ -7,7 +7,7 @@ import RepoSelector from './RepoSelector';
 import FileTree from './FileTree';
 import FileContentDisplay from './FileContentDisplay';
 import ModelSettings from './ModelSettings';
-import './App.css';
+// Removed App.css import: import './App.css';
 
 // Import custom hooks
 import { useSystemPrompt } from './hooks/useSystemPrompt';
@@ -43,9 +43,9 @@ function App() {
     const [chatError, setChatError] = useState<string | null>(null);
 
     // --- New State for API Key Management ---
-    const [userHasGeminiKey, setUserHasGeminiKey] = useState<boolean | null>(null); // null: unknown, true: has key, false: no key
+    const [userHasGeminiKey, setUserHasGeminiKey] = useState<boolean | null>(null);
     const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
-    const [apiKeyStatusLoading, setApiKeyStatusLoading] = useState<boolean>(true); // Start true for initial check
+    const [apiKeyStatusLoading, setApiKeyStatusLoading] = useState<boolean>(true);
 
     // --- Custom Hooks ---
     const {
@@ -53,7 +53,7 @@ function App() {
         setSystemPrompt,
         showSystemPromptInput,
         setShowSystemPromptInput,
-        isLoadingPrompt, // <-- Get loading state
+        isLoadingPrompt,
         isSystemPromptSaving,
         systemPromptMessage,
         handleSaveSystemPrompt,
@@ -69,8 +69,7 @@ function App() {
         totalSessionStats,
         recordCallStats,
         resetCurrentCallStats,
-        // updateGeminiConfig // if needed from useModels
-    } = useModels(); // No initial model needed here, hook handles default/DB pref
+    } = useModels();
 
     const {
         repoUrl,
@@ -178,7 +177,6 @@ function App() {
 
 
     const handlePromptSubmit = useCallback(async (prompt: string) => {
-        // --- Existing API Key checks ---
         if (userHasGeminiKey === false) {
             setChatError("Gemini API Key is not set. Please set your API key.");
             setShowApiKeyModal(true); return;
@@ -191,13 +189,11 @@ function App() {
             setChatError("Please type a prompt, attach a file, or select files from the tree.");
             return;
         }
-        // --- End API Key checks ---
 
         setChatIsLoading(true);
         setChatError(null);
         resetCurrentCallStats();
 
-        // --- Logic for including file context ---
         let filesToIncludeInPromptSegment = "";
         if (promptSelectedFilePaths.length > 0 && parsedRepomixData) {
             let selectedFilesContentParts: string[] = [];
@@ -226,28 +222,23 @@ function App() {
             combinedPromptForApi += `Context from selected repository files:\n${contextContent}\n\n`;
         }
         combinedPromptForApi += prompt ? `User Prompt: ${prompt}` : (contextDescriptor ? `User Prompt: Please analyze the ${contextDescriptor}.` : `User Prompt: Please analyze.`);
-        // --- End logic for including file context ---
 
         const userDisplayPrompt = prompt || contextDescriptor || "Analyze request";
         const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userDisplayPrompt }] };
         const historyForBackend: ChatMessage[] = chatHistory.slice(-MAX_HISTORY_TURNS * 2).map(msg => ({ role: msg.role, parts: msg.parts }));
         setChatHistory(prev => [...prev, newUserMessage]);
 
-        // --- MODIFIED API Call (systemPrompt removed) ---
         const result = await api.callGemini({
             history: historyForBackend,
             newMessage: combinedPromptForApi,
-            // systemPrompt: systemPrompt, // <-- REMOVED
-            modelCallName: selectedModelCallName, // Send the UI's *current* selection
+            modelCallName: selectedModelCallName,
         });
-        // --- END MODIFICATION ---
 
-        // --- Handle API result ---
         if (result.success && result.text) {
             const newModelMessage: ChatMessage = { role: 'model', parts: [{ text: result.text }] };
             setChatHistory(prev => [...prev, newModelMessage]);
             if (result.inputTokens !== undefined && result.outputTokens !== undefined && result.totalCost !== undefined) {
-                recordCallStats({ // recordCallStats now handles potential model updates internally
+                recordCallStats({
                     inputTokens: result.inputTokens,
                     outputTokens: result.outputTokens,
                     totalTokens: (result.inputTokens || 0) + (result.outputTokens || 0),
@@ -264,16 +255,14 @@ function App() {
                 setUserHasGeminiKey(false);
                 setShowApiKeyModal(true);
             }
-            setChatHistory(prev => prev.slice(0, -1)); // Remove user message on failure
+            setChatHistory(prev => prev.slice(0, -1));
         }
         setChatIsLoading(false);
-        // --- End Handle API result ---
 
     }, [
         chatHistory, selectedModelCallName, recordCallStats, resetCurrentCallStats,
         parsedRepomixData, promptSelectedFilePaths, attachedFileName,
-        userHasGeminiKey, apiKeyStatusLoading // <-- Dependencies
-        // systemPrompt removed from dependencies
+        userHasGeminiKey, apiKeyStatusLoading
     ]);
 
     const displayAttachedFileNameForInputArea = useMemo(() => {
@@ -288,47 +277,75 @@ function App() {
         return attachedFileName;
     }, [promptSelectedFilePaths, allFilePathsInCurrentRepomix, attachedFileName]);
 
-    // Include isLoadingPrompt in the general loading check
     const anyLoading = chatIsLoading || isGenerating || isLoadingFileContent || isLoadingModels ||
                        isLoadingSelectedFileForView || isLoadingRepos || isSystemPromptSaving || apiKeyStatusLoading || isLoadingPrompt;
 
-    // --- Loading/Auth Checks ---
     if (authIsLoading || (session && apiKeyStatusLoading && userHasGeminiKey === null) ) {
-        return <div className="app-container" style={{ textAlign: 'center', paddingTop: '50px' }}>Loading application essentials...</div>;
+        // Apply basic centering and text styles for loading message
+        return <div className="flex justify-center items-center h-screen text-center text-lg">Loading application essentials...</div>;
     }
     if (!session || !user) {
         return <AuthForm />;
     }
-    // --- End Loading/Auth Checks ---
+
+    // --- Base and Conditional Classes ---
+    // Using clsx or classnames library can make managing conditional classes cleaner,
+    // but for now, template literals will work.
+
+    const appContainerBaseClasses = "flex flex-col h-screen bg-white border border-[#e7eaf3] overflow-hidden";
+    const appContainerNormalClasses = "w-[80%] mx-auto rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.08),_0_1px_3px_rgba(0,0,0,0.05)]";
+    const appContainerFullscreenClasses = "w-full max-w-none m-0 border-none rounded-none shadow-none";
+
+    const mainContentWrapperBaseClasses = "flex flex-row flex-grow overflow-hidden";
+    // Calculate height using arbitrary value syntax for calc()
+    const mainContentWrapperHeight = "h-[calc(100vh_-_70px_-_45px)]";
+    const fullscreenMainContentHeight = "h-[calc(100vh_-_70px)]";
+
+    const fileTreeFullscreenClasses = "w-[22%] max-w-[450px] h-full";
+    const centerColumnFullscreenClasses = "w-[38%] flex-shrink-0 h-full flex flex-col overflow-hidden border-l border-r border-[#e7eaf3]";
+    const fileContentPanelFullscreenClasses = "w-auto flex-grow border-l border-[#e7eaf3] h-full";
+
+    const headerActionButtonBaseClasses = "px-3 py-[6px] text-sm rounded-md cursor-pointer border border-[#d9dce3] bg-[#f0f2f5] text-[#333] transition-colors duration-200 ease-in-out leading-snug hover:enabled:bg-[#e7eaf3] hover:enabled:border-[#c8cdd8] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap";
+
+    const controlPanelBaseClasses = "px-6 py-5 border border-[#e0e6ed] rounded-lg bg-white shadow-sm"; // Using px-6=24px, py-5=20px, shadow-sm
+
+    const statusMessageBaseClasses = "px-[15px] py-[10px] mt-[10px] rounded-md text-sm border";
+    const statusMessageSuccessClasses = "bg-[#e8f8f5] text-[#1abc9c] border-[#a3e4d7]";
+    const statusMessageWarningClasses = "bg-[#fdebd0] text-[#e67e22] border-[#f5cba7]";
+    const statusMessageErrorClasses = "bg-[#fdedec] text-[#e74c3c] border-[#f5b7b1]";
 
     return (
-    <div className={`app-container ${isFullScreenView ? 'full-screen-file-view' : ''}`}>
+    <div className={`${appContainerBaseClasses} ${isFullScreenView ? appContainerFullscreenClasses : appContainerNormalClasses}`}>
         <ApiKeyModal
             isOpen={showApiKeyModal && userHasGeminiKey === false && !apiKeyStatusLoading}
             onClose={() => setShowApiKeyModal(false)}
             onKeySubmitted={handleApiKeySubmitted}
         />
 
-        <header className="app-header">
-            <h1 className="app-title">Gemini Repomix Assistant</h1>
-            <div className="header-actions-right">
+        <header className="flex items-center justify-between px-[30px] h-[70px] border-b border-[#e7eaf3] bg-white flex-shrink-0">
+            <h1 className="text-2xl font-semibold text-[#2c3e50] m-0">
+                Gemini Repomix Assistant
+            </h1>
+            <div className="flex items-center gap-[15px]">
                 {userHasGeminiKey === false && !apiKeyStatusLoading && (
                     <button
                         onClick={() => setShowApiKeyModal(true)}
-                        className="header-action-button api-key-warning-button"
+                        className={`${headerActionButtonBaseClasses} bg-[#fff3cd] text-[#664d03] border-[#ffecb5] hover:enabled:bg-[#ffeeba] hover:enabled:border-[#ffda6a]`}
                         title="Set your Gemini API Key"
                     >
                         ⚠️ Set API Key
                     </button>
                 )}
-                {user && user.email && <span className="user-email-display">{user.email}</span>}
+                {user && user.email && <span className="text-sm text-[#5a6e87] whitespace-nowrap">{user.email}</span>}
                 {user && (
-                    <button onClick={signOut} className="header-action-button logout-button">Logout</button>
+                    <button onClick={signOut} className={`${headerActionButtonBaseClasses} text-[#e74c3c] bg-transparent border-[#f5b7b1] hover:enabled:bg-[#fdedec] hover:enabled:text-[#cb4335] hover:enabled:border-[#f1948a]`}>
+                        Logout
+                    </button>
                 )}
                 {(parsedRepomixData || comparisonView) && (
                     <button
                         onClick={toggleFullScreenView}
-                        className="header-action-button fullscreen-toggle-button"
+                        className={headerActionButtonBaseClasses}
                         title={isFullScreenView ? "Exit Full Screen View" : "Expand File View"}
                         disabled={anyLoading && isFullScreenView}
                     >
@@ -338,71 +355,82 @@ function App() {
             </div>
         </header>
 
-        <div className={`main-content-wrapper ${isFullScreenView ? 'full-screen-active' : ''}`}>
+        <div className={`${mainContentWrapperBaseClasses} ${isFullScreenView ? fullscreenMainContentHeight : mainContentWrapperHeight}`}>
+            {/* File Tree (Conditional) */}
             {parsedRepomixData && isFullScreenView && !comparisonView && (
-                <FileTree
-                    structure={parsedRepomixData.directoryStructure}
-                    selectedFilePath={selectedFilePathForView}
-                    onSelectFile={handleSelectFileForViewing}
-                    promptSelectedFilePaths={promptSelectedFilePaths}
-                    onTogglePromptSelectedFile={handleTogglePromptSelectedFile}
-                    onSelectAllPromptFiles={handleSelectAllPromptFiles}
-                    onDeselectAllPromptFiles={handleDeselectAllPromptFiles}
-                />
+                <div className={fileTreeFullscreenClasses}> {/* Added wrapper for sizing */}
+                  <FileTree
+                      structure={parsedRepomixData.directoryStructure}
+                      selectedFilePath={selectedFilePathForView}
+                      onSelectFile={handleSelectFileForViewing}
+                      promptSelectedFilePaths={promptSelectedFilePaths}
+                      onTogglePromptSelectedFile={handleTogglePromptSelectedFile}
+                      onSelectAllPromptFiles={handleSelectAllPromptFiles}
+                      onDeselectAllPromptFiles={handleDeselectAllPromptFiles}
+                  />
+                </div>
             )}
 
-            <div className="center-column">
-                <div className="scrollable-content-area">
+             {/* Center Column */}
+            <div className={`flex flex-col flex-grow overflow-hidden ${isFullScreenView && !comparisonView ? centerColumnFullscreenClasses : 'border-r border-[#e7eaf3]'}`}>
+                {/* Scrollable Area */}
+                <div className="flex-grow overflow-y-auto flex flex-col gap-6 px-[30px] pt-6 pb-6"> {/* Using gap-6=24px, p-6=24px */}
                     {userHasGeminiKey === false && !apiKeyStatusLoading && (
-                        <div className="error-message" style={{textAlign: 'center', marginBottom: '1rem', padding: '10px'}}>
+                        <div className="text-center mb-4 p-[10px] text-[#c0392b] bg-[#fadbd8] border border-[#f1948a] rounded-md"> {/* Error message style */}
                             Gemini API Key is not set. Chat functionality is disabled.
-                            <button onClick={() => setShowApiKeyModal(true)} style={{marginLeft: '10px', padding: '5px 10px', cursor: 'pointer'}}>Set Key</button>
+                            <button onClick={() => setShowApiKeyModal(true)} className="ml-2 px-2 py-1 text-xs bg-white border border-gray-300 rounded cursor-pointer hover:bg-gray-100">Set Key</button>
                         </div>
                     )}
-                    <div className="top-controls-row">
-                        <div className="top-controls-left">
-                            <RepomixForm
-                                repoUrl={repoUrl}
-                                onRepoUrlChange={onRepoUrlChange}
-                                onGenerate={handleGenerateRepomixFile}
-                                isGenerating={isGenerating}
-                                generationMessage={generationMessage}
-                                generationError={generationError}
-                            />
-                            <RepoSelector
-                                repos={availableRepos}
-                                onSelectRepo={loadRepoFileContent}
-                                isLoading={isLoadingRepos || isLoadingFileContent}
-                                selectedValue={selectedRepoFile}
-                            />
-                            <div className="system-prompt-settings-group">
+                    {/* Top Controls Row */}
+                    <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6 lg:gap-[30px] pb-6 mb-6 border-b border-[#e7eaf3]">
+                        {/* Left Controls */}
+                        <div className="flex flex-col gap-6 lg:basis-1/2">
+                            <div className={controlPanelBaseClasses}>
+                                <RepomixForm
+                                    repoUrl={repoUrl}
+                                    onRepoUrlChange={onRepoUrlChange}
+                                    onGenerate={handleGenerateRepomixFile}
+                                    isGenerating={isGenerating}
+                                    generationMessage={generationMessage}
+                                    generationError={generationError}
+                                />
+                             </div>
+                            <div className={controlPanelBaseClasses}>
+                                <RepoSelector
+                                    repos={availableRepos}
+                                    onSelectRepo={loadRepoFileContent}
+                                    isLoading={isLoadingRepos || isLoadingFileContent}
+                                    selectedValue={selectedRepoFile}
+                                />
+                             </div>
+                            <div className={`${controlPanelBaseClasses} system-prompt-settings-group`}> {/* Keep class if children target it */}
+                                <h3 className="text-lg font-semibold text-[#34495e] mt-0 mb-5">System Prompt</h3>
                                 <button
                                     onClick={() => setShowSystemPromptInput(prev => !prev)}
-                                    className="toggle-system-prompt-button"
-                                    disabled={isSystemPromptSaving || isLoadingPrompt} // <-- Disable while loading prompt
+                                    className="self-start px-[15px] py-[9px] text-sm font-medium text-white bg-[#5dade2] border-none rounded-md cursor-pointer transition-colors duration-200 ease-in-out hover:bg-[#3498db] disabled:opacity-50 disabled:cursor-not-allowed"
+                                    disabled={isSystemPromptSaving || isLoadingPrompt}
                                 >
-                                    {/* Updated button text based on loading state */}
                                     {isLoadingPrompt ? 'Loading...' : (showSystemPromptInput ? 'Hide' : 'Set') + ' System Prompt'}
                                 </button>
                                 {showSystemPromptInput && (
-                                    <div className="system-prompt-input-area">
+                                    <div className="flex flex-col gap-3 mt-4"> {/* gap-3=12px, mt-4=16px */}
                                         <textarea
                                             value={systemPrompt}
                                             onChange={(e) => setSystemPrompt(e.target.value)}
                                             rows={3}
-                                            className="system-prompt-textarea"
-                                            disabled={isSystemPromptSaving || isLoadingPrompt} // <-- Disable while loading/saving
+                                            className="w-full px-3 py-[10px] border border-[#ccd1d9] rounded-md text-base resize-y min-h-[80px] focus:outline-none focus:border-[#5dade2] focus:ring-3 focus:ring-[#5dade2]/15 disabled:bg-[#f4f6f8] disabled:text-[#aeb6bf]"
+                                            disabled={isSystemPromptSaving || isLoadingPrompt}
                                             placeholder={isLoadingPrompt ? "Loading system prompt..." : "Enter system prompt (saved per user)..."}
                                         />
                                         <button
                                             onClick={handleSaveSystemPrompt}
-                                            disabled={isSystemPromptSaving || isLoadingPrompt || !systemPrompt?.trim()} // <-- Disable while loading/saving
-                                            className="save-system-prompt-button"
+                                            disabled={isSystemPromptSaving || isLoadingPrompt || !systemPrompt?.trim()}
+                                            className="self-start px-[18px] py-[10px] text-sm font-medium text-white bg-[#2ecc71] border-none rounded-md cursor-pointer transition-colors duration-200 ease-in-out hover:enabled:bg-[#27ae60] disabled:bg-[#e5e7e9] disabled:text-[#909497] disabled:cursor-not-allowed"
                                         >
-                                            {isSystemPromptSaving ? 'Saving...' : 'Save to DB'} {/* Changed label */}
+                                            {isSystemPromptSaving ? 'Saving...' : 'Save to DB'}
                                         </button>
                                         {systemPromptMessage && (
-                                            <p className={`system-prompt-status ${systemPromptMessage.includes('Error') ? 'error' : 'success'}`}>
+                                            <p className={`${statusMessageBaseClasses} ${systemPromptMessage.includes('Error') ? statusMessageErrorClasses : statusMessageSuccessClasses}`}>
                                                 {systemPromptMessage}
                                             </p>
                                         )}
@@ -410,58 +438,71 @@ function App() {
                                 )}
                             </div>
                         </div>
-                        <div className="top-controls-right">
-                            <ModelSettings
-                                availableModels={availableModels}
-                                selectedModelCallName={selectedModelCallName}
-                                onModelChange={handleModelChange}
-                                isLoadingModels={isLoadingModels}
-                                currentCallStats={currentCallStats}
-                                totalSessionStats={totalSessionStats}
-                                isChatLoading={chatIsLoading} // Pass chat loading state
-                            />
+                        {/* Right Controls */}
+                        <div className="flex flex-col gap-6 lg:basis-1/2">
+                            <div className={controlPanelBaseClasses}>
+                                <ModelSettings
+                                    availableModels={availableModels}
+                                    selectedModelCallName={selectedModelCallName}
+                                    onModelChange={handleModelChange}
+                                    isLoadingModels={isLoadingModels}
+                                    currentCallStats={currentCallStats}
+                                    totalSessionStats={totalSessionStats}
+                                    isChatLoading={chatIsLoading}
+                                />
+                             </div>
                         </div>
-                    </div>
+                    </div> {/* End Top Controls Row */}
 
+                    {/* Attachment Status */}
                     {attachmentStatus && (
-                        <div className={`attachment-status ${attachmentStatus.includes('Failed') || attachmentStatus.includes('non-standard') ? 'warning' : 'success'}`}>
+                         <div className={`${statusMessageBaseClasses} ${attachmentStatus.includes('Failed') || attachmentStatus.includes('non-standard') ? statusMessageWarningClasses : statusMessageSuccessClasses}`}>
                             {attachmentStatus}
                         </div>
                     )}
 
-                    {globalError && <div className="error-message main-error">{globalError}</div>}
+                    {/* Global Error */}
+                    {globalError && <div className={`px-[18px] py-3 mt-[10px] mb-[10px] rounded-md text-center flex-shrink-0 text-[#c0392b] bg-[#fadbd8] border border-[#f1948a]`}>{globalError}</div>}
 
+                    {/* Chat Interface */}
                     <ChatInterface
                         history={chatHistory}
                         onStartComparison={handleStartComparison}
                         parsedRepomixData={parsedRepomixData}
                     />
                     {chatIsLoading && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'user' && (
-                        <div className="loading-indicator">Thinking...</div>
+                        <div className="px-[18px] py-3 mt-[10px] mb-[10px] rounded-md text-center flex-shrink-0 text-[#566573] italic">Thinking...</div>
                     )}
+                </div> {/* End Scrollable Area */}
+
+                {/* Input Area Container */}
+                <div className="flex-shrink-0 bg-[#f8f9fc] px-[25px] py-3 border-t border-[#e7eaf3] shadow-[0_-2px_5px_rgba(0,0,0,0.03)] z-10">
+                    <InputArea
+                        onPromptSubmit={handlePromptSubmit}
+                        onFileAttach={handleManualFileAttach}
+                        isLoading={anyLoading || (userHasGeminiKey === false && !apiKeyStatusLoading)}
+                        attachedFileName={displayAttachedFileNameForInputArea}
+                    />
                 </div>
-                <InputArea
-                    onPromptSubmit={handlePromptSubmit}
-                    onFileAttach={handleManualFileAttach}
-                    // Ensure all relevant loading states disable the input
-                    isLoading={anyLoading || (userHasGeminiKey === false && !apiKeyStatusLoading)}
-                    attachedFileName={displayAttachedFileNameForInputArea}
-                />
-            </div>
+            </div> {/* End Center Column */}
 
+            {/* File Content Display (Conditional) */}
             {(parsedRepomixData || comparisonView) && isFullScreenView && (
-                <FileContentDisplay
-                    filePath={selectedFilePathForView}
-                    content={selectedFileContentForView}
-                    isLoading={isLoadingSelectedFileForView && !comparisonView}
-                    comparisonData={comparisonView}
-                    onCloseComparison={handleCloseComparison}
-                />
+                 <div className={fileContentPanelFullscreenClasses}> {/* Added wrapper for sizing */}
+                    <FileContentDisplay
+                        filePath={selectedFilePathForView}
+                        content={selectedFileContentForView}
+                        isLoading={isLoadingSelectedFileForView && !comparisonView}
+                        comparisonData={comparisonView}
+                        onCloseComparison={handleCloseComparison}
+                    />
+                 </div>
             )}
-        </div>
+        </div> {/* End Main Content Wrapper */}
 
-        <footer className="app-footer">
+        <footer className="flex items-center justify-end px-[30px] py-[10px] h-[45px] border-t border-[#e7eaf3] bg-[#f8f9fc] text-xs text-[#7f8c9a] flex-shrink-0">
             {/* Optional: Add footer content like version or links */}
+            Powered by Gemini & Repomix
         </footer>
     </div>
 );
