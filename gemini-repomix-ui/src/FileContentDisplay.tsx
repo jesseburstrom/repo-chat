@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getHighlighter, bundledLanguages } from 'shikiji';
 import type { Highlighter } from 'shikiji';
-import './FileContentDisplay.css';
+// Removed: import './FileContentDisplay.css'; // Tailwind migration
 
 // --- Reusable Shikiji Hook ---
 const useShikijiHighlighterInstance = () => {
@@ -54,20 +54,25 @@ interface FileContentDisplayProps {
     onCloseComparison?: () => void;
 }
 
-// --- CodePane Sub-Component (Corrected) ---
+// Base Tailwind classes for the content area to be reused
+// ADDED overflow-x-auto HERE
+const contentAreaClasses = "flex-grow overflow-y-auto overflow-x-auto font-mono text-sm leading-snug";
+const placeholderClasses = "text-gray-500 italic text-center pt-[30px] font-sans";
+
+// --- CodePane Sub-Component (No changes needed here for overflow) ---
 const CodePane: React.FC<{ content: string; language: string; highlighter: Highlighter | null; title: string }> =
   React.memo(({ content, language, highlighter, title }) => {
     const [html, setHtml] = useState<string | null>(null);
     const [isHighlighting, setIsHighlighting] = useState(false);
 
     useEffect(() => {
-        let isActive = true; // To prevent state updates on unmounted component
+        let isActive = true;
 
         const highlightContent = async () => {
-            if (!highlighter || typeof content !== 'string') { // Ensure content is a string
-                const safeContent = typeof content === 'string' ? content.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
+            if (!highlighter || typeof content !== 'string') {
+                const safeContent = typeof content === 'string' ? content.replace(/</g, "<").replace(/>/g, ">") : '';
                 if (isActive) {
-                    setHtml(`<pre><code>${safeContent || ''}</code></pre>`);
+                    setHtml(`<pre class="m-0 whitespace-pre-wrap break-words"><code class="block p-[5px]">${safeContent || ''}</code></pre>`);
                     setIsHighlighting(false);
                 }
                 return;
@@ -76,16 +81,15 @@ const CodePane: React.FC<{ content: string; language: string; highlighter: Highl
             if (isActive) setIsHighlighting(true);
 
             try {
-                // Use async/await for highlighter.codeToHtml
                 const resultHtml: string = await highlighter.codeToHtml(content, { lang: language, theme: 'material-theme-lighter' });
                 if (isActive) {
                     setHtml(resultHtml);
                 }
-            } catch (err: any) { // Explicitly type err (or use 'Error' or 'unknown')
+            } catch (err: any) {
                 console.warn(`Highlighting error for ${title} (lang: ${language}):`, err);
-                const safeContent = content.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // Content is known to be string here
+                const safeContent = content.replace(/</g, "<").replace(/>/g, ">");
                 if (isActive) {
-                    setHtml(`<pre><code>${safeContent}</code></pre>`); // Fallback to unhighlighted
+                    setHtml(`<pre class="m-0 whitespace-pre-wrap break-words"><code class="block p-[5px]">${safeContent}</code></pre>`);
                 }
             } finally {
                 if (isActive) {
@@ -96,23 +100,23 @@ const CodePane: React.FC<{ content: string; language: string; highlighter: Highl
 
         highlightContent();
 
-        return () => {
-            isActive = false; // Cleanup on unmount
-        };
-    }, [content, language, highlighter, title]); // Dependencies for the effect
+        return () => { isActive = false; };
+    }, [content, language, highlighter, title]);
 
-    // Rendering logic for CodePane
-    if (isHighlighting && !html) return <div className="loading-placeholder">Highlighting {title}...</div>;
-    if (!html) { // Fallback if html is still null (e.g., initial render or error before first highlight)
-        const safeContent = typeof content === 'string' ? content.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
-        return <pre><code>{safeContent}</code></pre>;
+    if (isHighlighting && !html) return <div className={placeholderClasses}>Highlighting {title}...</div>;
+
+    if (!html) {
+        const safeContent = typeof content === 'string' ? content.replace(/</g, "<").replace(/>/g, ">") : '';
+        return <pre className="m-0 whitespace-pre-wrap break-words"><code className="block p-[5px]">{safeContent}</code></pre>;
     }
-    return <div dangerouslySetInnerHTML={{ __html: html }} />;
+    // The div itself can have font/line-height settings that might influence the rendered code
+    // Shikiji's <pre> inside will handle its own overflow IF the parent (.content-area) is correctly constrained/scrollable
+    return <div className="font-mono text-sm leading-snug" dangerouslySetInnerHTML={{ __html: html }} />;
 });
 // --- End CodePane Sub-Component ---
 
 
-// --- Main FileContentDisplay Component ---
+// --- Main FileContentDisplay Component (with Tailwind) ---
 const FileContentDisplay: React.FC<FileContentDisplayProps> = ({
     filePath,
     content,
@@ -122,29 +126,54 @@ const FileContentDisplay: React.FC<FileContentDisplayProps> = ({
 }) => {
     const highlighter = useShikijiHighlighterInstance();
 
-    // Memoized language calculations
     const singleFileLanguage = useMemo(() => getLanguageFromPath(filePath), [filePath]);
     const comparisonOriginalLanguage = useMemo(() => getLanguageFromPath(comparisonData?.filePath || null), [comparisonData?.filePath]);
-    const comparisonSuggestedLanguage = comparisonOriginalLanguage; // Assume same lang for suggested
+    const comparisonSuggestedLanguage = comparisonOriginalLanguage;
 
-    // Comparison View
+    // Base classes for the main panel
+    // overflow-hidden here is correct - we want the *inner* .content-area to scroll, not the whole panel
+    const panelBaseClasses = "p-2.5 bg-white border-l border-gray-300 overflow-hidden h-full flex-shrink-0 flex flex-col";
+    // Width is applied by the parent App.tsx
+
+    // Base classes for the h4 title
+    const h4BaseClasses = "mt-0 mb-2.5 text-[0.95em] text-gray-700 font-medium border-b border-gray-200 pb-[5px] whitespace-nowrap overflow-hidden text-ellipsis flex-shrink-0";
+
     if (comparisonData) {
         return (
-            <div className="file-content-panel comparison-active">
-                <div className="comparison-header">
-                    <h4>Comparing: {comparisonData.filePath}</h4>
-                    {onCloseComparison && <button onClick={onCloseComparison} className="close-comparison-button">Close Comparison</button>}
+            <div className={`${panelBaseClasses}`}>
+                {/* Comparison Header */}
+                <div className="flex justify-between items-center flex-shrink-0">
+                    <h4 className={`${h4BaseClasses} border-b-0 mb-0`}>
+                        Comparing: {comparisonData.filePath}
+                    </h4>
+                    {onCloseComparison && (
+                        <button
+                            onClick={onCloseComparison}
+                            className="px-2.5 py-1 text-sm bg-gray-300 border border-gray-400 rounded cursor-pointer hover:bg-gray-400"
+                        >
+                            Close Comparison
+                        </button>
+                    )}
                 </div>
-                <div className="comparison-panes">
-                    <div className="pane original-pane">
-                        <h5>Original</h5>
-                        <div className="content-area">
+                {/* Comparison Panes */}
+                <div className="flex flex-row flex-grow overflow-hidden gap-2.5 border-t border-gray-200 pt-2.5">
+                     {/* Original Pane */}
+                    <div className="flex-1 flex flex-col overflow-hidden border border-gray-100 rounded">
+                        <h5 className="m-0 px-2 py-[5px] bg-gray-50 text-sm font-medium border-b border-gray-300 flex-shrink-0">
+                            Original
+                        </h5>
+                         {/* Uses contentAreaClasses which now includes overflow-x-auto */}
+                        <div className={`${contentAreaClasses} bg-gray-50`}>
                             <CodePane title="Original" content={comparisonData.originalContent} language={comparisonOriginalLanguage} highlighter={highlighter} />
                         </div>
                     </div>
-                    <div className="pane suggested-pane">
-                        <h5>Suggested</h5>
-                        <div className="content-area">
+                     {/* Suggested Pane */}
+                    <div className="flex-1 flex flex-col overflow-hidden border border-gray-100 rounded">
+                        <h5 className="m-0 px-2 py-[5px] bg-gray-50 text-sm font-medium border-b border-gray-300 flex-shrink-0">
+                            Suggested
+                        </h5>
+                         {/* Uses contentAreaClasses which now includes overflow-x-auto */}
+                        <div className={`${contentAreaClasses} bg-gray-50`}>
                              <CodePane title="Suggested" content={comparisonData.suggestedContent} language={comparisonSuggestedLanguage} highlighter={highlighter} />
                         </div>
                     </div>
@@ -153,31 +182,40 @@ const FileContentDisplay: React.FC<FileContentDisplayProps> = ({
         );
     }
 
-    // Single File View
+    // --- Single File View ---
+
     if (isLoading) {
         return (
-            <div className="file-content-panel">
-                <h4>{filePath ? `Loading: ${filePath}` : 'Loading...'}</h4>
-                <div className="content-area loading-placeholder">Loading file content...</div>
+            <div className={`${panelBaseClasses}`}>
+                <h4 className={h4BaseClasses}>
+                    {filePath ? `Loading: ${filePath}` : 'Loading...'}
+                </h4>
+                {/* Placeholder doesn't need horizontal scroll */}
+                <div className={`flex-grow overflow-y-auto ${placeholderClasses}`}>
+                    Loading file content...
+                </div>
             </div>
         );
     }
 
     if (!filePath || content === null) {
         return (
-            <div className="file-content-panel">
-                <h4>File Content</h4>
-                <div className="content-area placeholder">
+            <div className={`${panelBaseClasses}`}>
+                <h4 className={h4BaseClasses}>File Content</h4>
+                 {/* Placeholder doesn't need horizontal scroll */}
+                <div className={`flex-grow overflow-y-auto ${placeholderClasses}`}>
                     Select a file from the tree to view its content.
                 </div>
             </div>
         );
     }
 
+    // Default view: showing single file content
     return (
-        <div className="file-content-panel">
-            <h4>Content: {filePath}</h4>
-            <div className="content-area">
+        <div className={`${panelBaseClasses}`}>
+            <h4 className={h4BaseClasses}>Content: {filePath}</h4>
+            {/* Uses contentAreaClasses which now includes overflow-x-auto */}
+            <div className={contentAreaClasses}>
                  <CodePane title="File Content" content={content} language={singleFileLanguage} highlighter={highlighter} />
             </div>
         </div>

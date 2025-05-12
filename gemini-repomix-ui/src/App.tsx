@@ -303,7 +303,7 @@ function App() {
 
     const fileTreeFullscreenClasses = "w-[22%] max-w-[450px] h-full";
     const centerColumnFullscreenClasses = "w-[38%] flex-shrink-0 h-full flex flex-col overflow-hidden border-l border-r border-[#e7eaf3]";
-    const fileContentPanelFullscreenClasses = "w-auto flex-grow border-l border-[#e7eaf3] h-full";
+    const fileContentPanelFullscreenClasses = "flex-1 border-l border-[#e7eaf3] h-full overflow-hidden"; // flex-1 and overflow-hidden
 
     const headerActionButtonBaseClasses = "px-3 py-[6px] text-sm rounded-md cursor-pointer border border-[#d9dce3] bg-[#f0f2f5] text-[#333] transition-colors duration-200 ease-in-out leading-snug hover:enabled:bg-[#e7eaf3] hover:enabled:border-[#c8cdd8] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap";
 
