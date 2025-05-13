@@ -189,4 +189,3 @@ Ask questions about your code, get explanations, request refactoring suggestions
 
 ---
 
-This README provides a comprehensive overview. You might want to add more specific details, contribution guidelines, or a link to a live demo if available.
