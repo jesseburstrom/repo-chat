@@ -7,7 +7,7 @@ import type { Highlighter } from 'shikiji';
 
 import { ChatMessage } from './App'; // Assuming ChatMessage is in App.tsx
 import { ParsedRepomixData } from './utils/parseRepomix'; // Assuming ParsedRepomixData is here
-import './ChatInterface.css';
+// Removed: import './ChatInterface.css'; // Migrated to Tailwind
 
 const useShikijiHighlighter = () => {
   const [highlighter, setHighlighter] = useState<Highlighter | null>(null);
@@ -24,22 +24,21 @@ const useShikijiHighlighter = () => {
   return highlighter;
 };
 
-// --- CORRECTED Props Interface ---
 interface ChatInterfaceProps {
   history: ChatMessage[];
   parsedRepomixData: ParsedRepomixData | null;
   onStartComparison: (filePath: string, suggestedContent: string) => void;
 }
-// --- End Corrected Props ---
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixData, onStartComparison }) => {
   const highlighter = useShikijiHighlighter();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Scroll logic remains the same
     if (history.length > 0) {
       const lastMessage = history[history.length - 1];
-      const scrollableArea = bottomRef.current?.closest('.scrollable-content-area');
+      const scrollableArea = bottomRef.current?.closest('.scrollable-content-area'); // Assuming parent still has this class for targeting
       if (lastMessage.role !== 'model' || history.length === 1) {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
       } else if (scrollableArea) {
@@ -53,19 +52,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
     }
   }, [history]);
 
+  // --- CodeBlockRenderer Component ---
   const CodeBlockRenderer = ({ node, inline, className, children, ...props }: any) => {
     const [copyButtonText, setCopyButtonText] = useState('Copy');
     const rawCodeString = String(children);
     const lines = rawCodeString.split('\n');
 
-    let filePathFromComment: string | null = null; // Path extracted from the comment
-    let actualFilePathForComparison: string | null = null; // Path to use for comparison (potentially resolved full path)
+    let filePathFromComment: string | null = null;
+    let actualFilePathForComparison: string | null = null;
     let contentAfterFilePathLine = rawCodeString.replace(/\n$/, '');
 
     if (lines.length > 0) {
         const firstLine = lines[0].trim();
-        // console.log("[CodeBlockRenderer] Raw first line of code block:", `'${firstLine}'`);
-
         const pathPattern = /((?:[\w.-]+\/)*[\w.-]+\.[\w.-]+)/;
         const lenientLineCommentRegex = new RegExp(`^(?://|#|--)\\s*.*?${pathPattern.source}`);
         const lenientCssBlockCommentRegex = new RegExp(`^\\/\\*\\s*.*?${pathPattern.source}.*?\\*\\/`);
@@ -78,44 +76,33 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
             filePathFromComment = pathMatch[1];
             contentAfterFilePathLine = lines.slice(1).join('\n').replace(/\n$/, '');
         }
-        // console.log("[CodeBlockRenderer] Extracted filePathFromComment (lenient):", filePathFromComment);
     }
 
-    // --- Attempt to resolve partial path to full path ---
+    // Path resolution logic remains the same
     if (filePathFromComment && parsedRepomixData?.fileContents) {
         if (parsedRepomixData.fileContents[filePathFromComment]) {
-            actualFilePathForComparison = filePathFromComment; // Direct match (full path was provided)
+            actualFilePathForComparison = filePathFromComment;
         } else {
-            // Try to find a key in fileContents that ENDS WITH the filePathFromComment
             const possibleMatches = Object.keys(parsedRepomixData.fileContents)
-                .filter(key => key.endsWith(filePathFromComment!)); // filePathFromComment is not null here
-
+                .filter(key => key.endsWith(filePathFromComment!));
             if (possibleMatches.length === 1) {
-                actualFilePathForComparison = possibleMatches[0]; // Unique suffix match found
-                console.log(`[CodeBlockRenderer] Partial path "${filePathFromComment}" resolved to full path "${actualFilePathForComparison}" for comparison.`);
+                actualFilePathForComparison = possibleMatches[0];
             } else if (possibleMatches.length > 1) {
-                console.warn(`[CodeBlockRenderer] Partial path "${filePathFromComment}" is ambiguous. Found multiple matches: ${possibleMatches.join(', ')}. Comparison disabled.`);
-            } else {
-                // console.log(`[CodeBlockRenderer] Partial path "${filePathFromComment}" not found as a full path or unique suffix in parsedRepomixData.`);
+                console.warn(`[CodeBlockRenderer] Ambiguous path: ${filePathFromComment}. Matches: ${possibleMatches.join(', ')}`);
             }
         }
     }
-    // --- End Path Resolution ---
 
     const canCompareFile = actualFilePathForComparison && parsedRepomixData?.fileContents[actualFilePathForComparison];
-    // console.log(`[CodeBlockRenderer] canCompareFile: ${canCompareFile} (resolved path for comparison: "${actualFilePathForComparison}")`);
-
     const matchLang = /language-(\w+)/.exec(className || '');
-    // Use actualFilePathForComparison if available for better language guessing from full path, else fallback
     const pathForLangGuess = actualFilePathForComparison || filePathFromComment;
     const lang = matchLang ? matchLang[1] : (pathForLangGuess?.split('.').pop() || 'plaintext');
-    
-    // Decision to strip first line is based on whether *any* path was parsed from comment
     const codeToRenderAndCopy = filePathFromComment ? contentAfterFilePathLine : rawCodeString.replace(/\n$/, '');
 
+    // Apply Tailwind styles for inline and non-standard code
     const isLikelySingleWordBlock = !inline && !matchLang && codeToRenderAndCopy.length > 0 && !codeToRenderAndCopy.includes(' ') && !codeToRenderAndCopy.includes('\n') && !filePathFromComment;
-    if (isLikelySingleWordBlock) return <strong className="non-standard-code-highlight" {...props}>{codeToRenderAndCopy}</strong>;
-    if (inline) return <code className="inline-code" {...props}>{children}</code>;
+    if (isLikelySingleWordBlock) return <strong className="font-bold" {...props}>{codeToRenderAndCopy}</strong>; // .non-standard-code-highlight
+    if (inline) return <code className="bg-[#e8eaed] px-[0.4em] py-[0.1em] rounded-[4px] font-mono text-[0.9em]" {...props}>{children}</code>; // .inline-code
 
     const handleCopyClick = () => {
       navigator.clipboard.writeText(codeToRenderAndCopy).then(() => {
@@ -123,16 +110,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
       }).catch(err => { setCopyButtonText('Failed'); setTimeout(() => setCopyButtonText('Copy'), 2000); console.error("Copy failed:", err);});
     };
 
-    // Display path: prefer resolved full path if available, else the path from comment
     const displayPath = actualFilePathForComparison || filePathFromComment;
-    const languageLabel = <span className="code-language-label">{displayPath ? `${displayPath} (${lang})` : lang}</span>;
-    const copyButton = <button className={`copy-code-button ${copyButtonText !== 'Copy' ? 'copied' : ''}`} onClick={handleCopyClick} title="Copy code"> {copyButtonText} </button>;
-    
-    const compareButton = canCompareFile && actualFilePathForComparison ? ( // Guard with actualFilePathForComparison
+    const languageLabel = <span className="text-[0.8em] text-[#5f6368] font-sans capitalize">{displayPath ? `${displayPath} (${lang})` : lang}</span>; // .code-language-label
+
+    const copyButton = (
         <button
-            onClick={() => onStartComparison(actualFilePathForComparison, contentAfterFilePathLine)} // Use actualFilePathForComparison
-            className="compare-button"
-            title={`Compare changes for ${actualFilePathForComparison}`} // Use actualFilePathForComparison
+            // .copy-code-button & .copied logic
+            className={`px-2 py-[2px] text-[0.75em] font-sans border rounded-[4px] cursor-pointer transition-colors duration-200 ease-in-out ml-[10px]
+                       ${copyButtonText !== 'Copy' ? 'bg-[#a5d6a7] text-[#1b5e20] border-[#81c784] hover:bg-[#a5d6a7] hover:text-[#1b5e20]' : 'bg-[#e0e0e0] text-[#333] border-[#ccc] hover:bg-[#d0d0d0] hover:border-[#bbb]'}`}
+            onClick={handleCopyClick}
+            title="Copy code"
+        >
+            {copyButtonText}
+        </button>
+    );
+
+    const compareButton = canCompareFile && actualFilePathForComparison ? (
+        <button
+            onClick={() => onStartComparison(actualFilePathForComparison, contentAfterFilePathLine)}
+            // .compare-button
+            className="px-2 py-[2px] text-[0.75em] font-sans text-[#333] bg-[#e0e0e0] border border-[#ccc] rounded-[4px] cursor-pointer transition-colors duration-200 ease-in-out hover:bg-[#d0d0d0] hover:border-[#bbb]"
+            title={`Compare changes for ${actualFilePathForComparison}`}
         >
             Compare
         </button>
@@ -142,20 +140,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
     if (highlighter) {
       try {
         const html = highlighter.codeToHtml(codeToRenderAndCopy, { lang, theme: 'material-theme-lighter' });
-        codeBlockElement = <div dangerouslySetInnerHTML={{ __html: html }} />;
+        // The div wrapping dangerouslySetInnerHTML *must not* have conflicting whitespace/overflow styles
+        // Styles are applied by Shikiji's output <pre> tag itself
+        codeBlockElement = <div className="!m-0" dangerouslySetInnerHTML={{ __html: html }} />; // Override potential margin
       } catch (err) {
-        // console.warn(`[CodeBlockRenderer] Shikiji failed for lang "${lang}", path "${displayPath}":`, err);
-        codeBlockElement = <pre><code>{codeToRenderAndCopy}</code></pre>;
+        // Fallback styling with Tailwind
+        codeBlockElement = <pre className="m-0 rounded-b-[6px] text-[0.9em] overflow-x-auto p-[10px] leading-[1.4] whitespace-pre bg-[#f8f8f8]"><code>{codeToRenderAndCopy}</code></pre>;
       }
     } else {
-      codeBlockElement = <pre><code>{codeToRenderAndCopy}</code></pre>;
+      // Fallback styling with Tailwind
+      codeBlockElement = <pre className="m-0 rounded-b-[6px] text-[0.9em] overflow-x-auto p-[10px] leading-[1.4] whitespace-pre bg-[#f8f8f8]"><code>{codeToRenderAndCopy}</code></pre>;
     }
 
+    // Shikiji's generated pre tag should have styles matching the old CSS rule:
+    // .code-block-wrapper > div[class*="shiki"], .code-block-wrapper > pre[class*="language-"]
+    // margin: 0 !important; border-radius: 0 0 6px 6px; font-size: 0.9em !important; overflow-x: auto; padding: 10px !important; line-height: 1.4; white-space: pre; background-color: #f8f8f8;
+    // Tailwind classes are applied to the fallback <pre> above.
+
     return (
-      <div className="code-block-wrapper" {...props}>
-        <div className="code-block-header">
+      // .code-block-wrapper
+      <div className="relative mb-4" {...props}>
+        {/* .code-block-header */}
+        <div className="flex justify-between items-center px-2 py-[4px] bg-[#f0f0f0] rounded-t-[6px] border-b border-[#e0e0e0]">
           {languageLabel}
-          <div className="code-block-actions">
+          {/* .code-block-actions */}
+          <div className="flex items-center gap-2">
             {compareButton}
             {copyButton}
           </div>
@@ -164,24 +173,53 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
       </div>
     );
   };
+  // --- End CodeBlockRenderer Component ---
 
   return (
-    <div className="chat-interface">
+    // .chat-interface
+    <div className="flex flex-col gap-[15px]">
       {history.map((message, index) => (
-        <div key={index} className={`chat-message ${message.role}`}>
-          <span className="message-role">{message.role === 'user' ? 'You' : 'Model'}</span>
-          <div className="message-content">
+        // .chat-message base styles
+        <div
+          key={index}
+          className={`max-w-[80%] px-[15px] py-[10px] rounded-[18px] leading-[1.5] break-words
+                     ${message.role === 'user'
+                        // .chat-message.user styles
+                        ? 'bg-[#e1f5fe] self-end rounded-br-[4px]'
+                        // .chat-message.model styles
+                        : 'bg-white border border-[#e0e0e0] self-start rounded-bl-[4px]'
+                     }`}
+        >
+          {/* .message-role */}
+          <span className="block font-medium text-[0.9em] text-[#5f6368] mb-1">
+            {message.role === 'user' ? 'You' : 'Model'}
+          </span>
+          {/* .message-content base styles */}
+          <div className="text-base">
             {message.role === 'model' ? (
-              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CodeBlockRenderer }}>
+              // .message-content p, .message-content br handled by Markdown rendering + CodeBlockRenderer
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{ code: CodeBlockRenderer }}
+                // Add Tailwind classes for markdown elements if needed (e.g., p margin)
+                // className="prose prose-sm max-w-none" // Example using Tailwind typography plugin
+              >
                 {message.parts[0].text}
               </ReactMarkdown>
             ) : (
-              message.parts[0].text.split('\n').map((line, i) => <React.Fragment key={i}>{line}<br /></React.Fragment>)
+              // Render user text with basic line breaks (Tailwind doesn't directly style <br>)
+              // This preserves manual line breaks entered by the user.
+              message.parts[0].text.split('\n').map((line, i, arr) => (
+                <React.Fragment key={i}>
+                    {line}
+                    {i < arr.length - 1 && <br />} {/* Add <br> except after the last line */}
+                </React.Fragment>
+              ))
             )}
           </div>
         </div>
       ))}
-      <div ref={bottomRef} style={{ height: '1px' }} />
+      <div ref={bottomRef} style={{ height: '1px' }} /> {/* For scrolling */}
     </div>
   );
 };
