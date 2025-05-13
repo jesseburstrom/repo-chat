@@ -59,7 +59,7 @@ interface FileContentDisplayProps {
 const contentAreaClasses = "flex-grow overflow-y-auto overflow-x-auto font-mono text-sm leading-snug";
 const placeholderClasses = "text-gray-500 italic text-center pt-[30px] font-sans";
 
-// --- CodePane Sub-Component (No changes needed here for overflow) ---
+// --- CodePane Sub-Component ---
 const CodePane: React.FC<{ content: string; language: string; highlighter: Highlighter | null; title: string }> =
   React.memo(({ content, language, highlighter, title }) => {
     const [html, setHtml] = useState<string | null>(null);
@@ -69,10 +69,19 @@ const CodePane: React.FC<{ content: string; language: string; highlighter: Highl
         let isActive = true;
 
         const highlightContent = async () => {
-            if (!highlighter || typeof content !== 'string') {
-                const safeContent = typeof content === 'string' ? content.replace(/</g, "<").replace(/>/g, ">") : '';
+            // Normalize line endings for the content prop to LF
+            const normalizedContent = typeof content === 'string'
+                ? content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+                : '';
+
+            if (!highlighter) {
+                // Fallback: Render plain text, ensure HTML entities are escaped
+                const safeContent = normalizedContent
+                    .replace(/&/g, "&")
+                    .replace(/</g, "<")
+                    .replace(/>/g, ">");
                 if (isActive) {
-                    setHtml(`<pre class="m-0 whitespace-pre-wrap break-words"><code class="block p-[5px]">${safeContent || ''}</code></pre>`);
+                    setHtml(`<pre class="m-0 whitespace-pre-wrap break-words p-[5px] bg-[#f8f8f8]"><code class="block">${safeContent || ''}</code></pre>`);
                     setIsHighlighting(false);
                 }
                 return;
@@ -81,15 +90,20 @@ const CodePane: React.FC<{ content: string; language: string; highlighter: Highl
             if (isActive) setIsHighlighting(true);
 
             try {
-                const resultHtml: string = await highlighter.codeToHtml(content, { lang: language, theme: 'material-theme-lighter' });
+                // Use normalizedContent with the highlighter
+                const resultHtml: string = await highlighter.codeToHtml(normalizedContent, { lang: language, theme: 'material-theme-lighter' });
                 if (isActive) {
                     setHtml(resultHtml);
                 }
             } catch (err: any) {
                 console.warn(`Highlighting error for ${title} (lang: ${language}):`, err);
-                const safeContent = content.replace(/</g, "<").replace(/>/g, ">");
+                // Fallback if highlighting fails, ensure HTML entities are escaped
+                const safeContent = normalizedContent
+                    .replace(/&/g, "&")
+                    .replace(/</g, "<")
+                    .replace(/>/g, ">");
                 if (isActive) {
-                    setHtml(`<pre class="m-0 whitespace-pre-wrap break-words"><code class="block p-[5px]">${safeContent}</code></pre>`);
+                     setHtml(`<pre class="m-0 whitespace-pre-wrap break-words p-[5px] bg-[#f8f8f8]"><code class="block">${safeContent}</code></pre>`);
                 }
             } finally {
                 if (isActive) {
@@ -105,12 +119,18 @@ const CodePane: React.FC<{ content: string; language: string; highlighter: Highl
 
     if (isHighlighting && !html) return <div className={placeholderClasses}>Highlighting {title}...</div>;
 
+    // Fallback rendering if html is still null
     if (!html) {
-        const safeContent = typeof content === 'string' ? content.replace(/</g, "<").replace(/>/g, ">") : '';
-        return <pre className="m-0 whitespace-pre-wrap break-words"><code className="block p-[5px]">{safeContent}</code></pre>;
+        const normalizedContent = typeof content === 'string'
+            ? content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+            : '';
+        const safeContent = normalizedContent
+            .replace(/&/g, "&")
+            .replace(/</g, "<")
+            .replace(/>/g, ">");
+        return <pre className="m-0 whitespace-pre-wrap break-words p-[5px] bg-[#f8f8f8]"><code className="block">{safeContent}</code></pre>;
     }
-    // The div itself can have font/line-height settings that might influence the rendered code
-    // Shikiji's <pre> inside will handle its own overflow IF the parent (.content-area) is correctly constrained/scrollable
+    
     return <div className="font-mono text-sm leading-snug" dangerouslySetInnerHTML={{ __html: html }} />;
 });
 // --- End CodePane Sub-Component ---

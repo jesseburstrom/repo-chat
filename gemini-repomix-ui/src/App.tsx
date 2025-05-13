@@ -276,11 +276,13 @@ function App() {
     const mainContentWrapperHeight = "h-[calc(100vh_-_70px_-_45px)]";
     const fullscreenMainContentHeight = "h-[calc(100vh_-_70px)]";
 
-    // ---- UPDATED FULLSCREEN CLASSES ----
+    // ---- FULLSCREEN CLASSES FOR 3-PANEL LAYOUT (File Tree, Chat, File Viewer) ----
     const fileTreeFullscreenClasses = "w-[22%] max-w-[450px] h-full flex-shrink-0"; // Added flex-shrink-0
     const centerColumnFullscreenClasses = "flex-1 h-full flex flex-col overflow-hidden border-l border-r border-[#e7eaf3]"; // CHANGED: w-[38%] flex-shrink-0 -> flex-1
     const fileContentPanelFullscreenClasses = "flex-1 h-full overflow-hidden border-l border-[#e7eaf3]"; // CHANGED: Added border-l (was implicit before), kept flex-1
-    // ---- END UPDATED FULLSCREEN CLASSES ----
+    // ---- NEW CLASSES FOR 2-PANEL FULLSCREEN COMPARISON LAYOUT (Chat 1/3, Comparison 2/3) ----
+    const chatColumnForComparisonViewClasses = "flex-1 h-full flex flex-col overflow-hidden border-r border-[#e7eaf3]";
+    const comparisonPanelForComparisonViewClasses = "flex-[2_1_0%] h-full overflow-hidden";
 
     const headerActionButtonBaseClasses = "px-3 py-[6px] text-sm rounded-md cursor-pointer border border-[#d9dce3] bg-[#f0f2f5] text-[#333] transition-colors duration-200 ease-in-out leading-snug hover:enabled:bg-[#e7eaf3] hover:enabled:border-[#c8cdd8] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap";
     const controlPanelBaseClasses = "px-6 py-5 border border-[#e0e6ed] rounded-lg bg-white shadow-sm";
@@ -348,12 +350,13 @@ function App() {
                 )}
 
                  {/* Center Column */}
-                <div className={`flex flex-col flex-grow overflow-hidden
-                                 ${isFullScreenView && !comparisonView
-                                    // Apply flex-1 class in fullscreen
-                                    ? centerColumnFullscreenClasses
-                                    // Normal view has default flex-grow and border
-                                    : 'border-r border-[#e7eaf3]'
+                <div className={`flex flex-col overflow-hidden h-full /* Base for structure */
+                                 ${isFullScreenView
+                                    ? (comparisonView
+                                        ? chatColumnForComparisonViewClasses  // FS + Comparison: Chat takes 1/3
+                                        : centerColumnFullscreenClasses       // FS + No Comparison (3-panel): Chat is flex-1
+                                      )
+                                    : 'flex-grow border-r border-[#e7eaf3]' // Not Fullscreen: Default full width behavior
                                  }`}
                 >
                     {/* Scrollable Area within Center Column */}
@@ -471,8 +474,11 @@ function App() {
 
                 {/* File Content Display (Conditional on Fullscreen) */}
                 {(parsedRepomixData || comparisonView) && isFullScreenView && (
-                    // Apply flex-1 class
-                     <div className={fileContentPanelFullscreenClasses}>
+                     <div className={
+                        comparisonView
+                            ? comparisonPanelForComparisonViewClasses // FS + Comparison: Comparison Panel takes 2/3
+                            : fileContentPanelFullscreenClasses     // FS + No Comparison (3-panel): File Viewer is flex-1
+                     }>
                         <FileContentDisplay
                             filePath={selectedFilePathForView}
                             content={selectedFileContentForView}

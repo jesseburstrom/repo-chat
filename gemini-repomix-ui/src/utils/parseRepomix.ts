@@ -87,7 +87,7 @@ export function parseRepomixFile(content: string): ParsedRepomixData | null {
         const structureContent = structureMatch[1]; // Don't trim here, helper needs original spacing
         const directoryStructure = parseDirectoryStructure(structureContent); // <= USE HELPER
 
-        // 2. Parse File Contents (logic remains the same)
+        // 2. Parse File Contents
         const filesContent = filesMatch[1];
         const fileContents: Record<string, string> = {};
         const fileRegex = /<file path="([^"]+)">([\s\S]*?)<\/file>/g;
@@ -95,7 +95,9 @@ export function parseRepomixFile(content: string): ParsedRepomixData | null {
 
         while ((fileBlockMatch = fileRegex.exec(filesContent)) !== null) {
             const filePath = fileBlockMatch[1];
-            const fileData = fileBlockMatch[2].trim();
+            // Get raw content from between tags. 
+            // Line ending normalization will happen in CodePane.
+            const fileData = fileBlockMatch[2]; 
             fileContents[filePath] = fileData;
         }
 
