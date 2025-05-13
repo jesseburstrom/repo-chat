@@ -1,6 +1,6 @@
 # Gemini Repomix Assistant
 
-**Gemini Repomix Assistant** is a powerful web application designed to help you understand, analyze, and interact with code repositories using Google's Gemini AI models. It leverages [Repomix](https://github.com/jesseburstrom/repomix) (assumed tool, link if available) to create comprehensive context packs of your codebase, which are then used to fuel insightful conversations with Gemini.
+**Gemini Repomix Assistant** is a powerful web application designed to help you understand, analyze, and interact with code repositories using Google's Gemini AI models. It leverages [Repomix](https://repomix.com/) (assumed tool, link if available) to create comprehensive context packs of your codebase, which are then used to fuel insightful conversations with Gemini.
 
 Ask questions about your code, get explanations, request refactoring suggestions, and much more, all within a user-friendly chat interface.
 
