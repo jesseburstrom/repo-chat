@@ -1,12 +1,12 @@
 // FilePath: gemini-repomix-ui/src/ChatInterface.tsx
-import React, { useState, useEffect, useRef, JSX } from 'react';
+import React, { useState, useEffect, useRef, JSX } from 'react'; // Ensure React is imported for React.Children
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getHighlighter, bundledLanguages } from 'shikiji';
 import type { Highlighter } from 'shikiji';
 
-import { ChatMessage } from './App'; // Assuming ChatMessage is in App.tsx
-import { ParsedRepomixData } from './utils/parseRepomix'; // Assuming ParsedRepomixData is here
+import { ChatMessage } from './App';
+import { ParsedRepomixData } from './utils/parseRepomix';
 
 const useShikijiHighlighter = () => {
   const [highlighter, setHighlighter] = useState<Highlighter | null>(null);
@@ -23,14 +23,16 @@ const useShikijiHighlighter = () => {
   return highlighter;
 };
 
+// Interface for props passed by ReactMarkdown to custom 'code' component
 interface CodeBlockRendererPropsFromMarkdown {
-  node?: any;
+  node?: any; // AST node from remark
   inline?: boolean;
-  className?: string;
-  children: React.ReactNode;
-  [key: string]: any;
+  className?: string; // e.g., "language-ts" for ```ts
+  children?: React.ReactNode; // *** MODIFIED: Made optional to fix the TS2322 error ***
+  [key: string]: any; // Allow other props ReactMarkdown might pass
 }
 
+// Interface for the CodeBlockRenderer component itself
 interface CustomCodeBlockRendererProps extends CodeBlockRendererPropsFromMarkdown {
   isParentBubbleFullWidth?: boolean;
   highlighter: Highlighter | null;
@@ -38,27 +40,35 @@ interface CustomCodeBlockRendererProps extends CodeBlockRendererPropsFromMarkdow
   onStartComparison: (filePath: string, suggestedContent: string) => void;
 }
 
-
 const CodeBlockRenderer: React.FC<CustomCodeBlockRendererProps> = ({
     node,
     inline,
     className,
-    children,
+    children, // This is now React.ReactNode | undefined
     isParentBubbleFullWidth,
     highlighter,
     parsedRepomixData,
     onStartComparison,
-    ...rest
+    ...rest // Captures other props like `key` or any other custom props from ReactMarkdown's `props`
 }) => {
     const [copyButtonText, setCopyButtonText] = useState('Copy');
-    const rawCodeString = String(children).replace(/\n$/, '');
-    const lines = rawCodeString.split('\n');
 
+    // *** MODIFIED: Robustly extract code string from children ***
+    // `React.Children.toArray(children).join('')` handles various forms of children:
+    // - string: "code" -> "code"
+    // - string[]: ["code", " more code"] -> "code more code"
+    // - undefined: undefined -> "" (empty string, NOT "undefined")
+    // - React elements (though less common for raw code blocks): extracts text content
+    const codeContentString = React.Children.toArray(children).join('');
+    const rawCodeString = codeContentString.replace(/\n$/, ''); // Remove single trailing newline
+
+    const lines = rawCodeString.split('\n');
     let filePathFromComment: string | null = null;
     let actualFilePathForComparison: string | null = null;
     let contentAfterFilePathLine = rawCodeString;
 
-    if (lines.length > 0) {
+    // File path detection logic (seems fine, but ensure it only runs for !inline if intended)
+    if (lines.length > 0 && !inline) { // Added !inline check, assuming path comments are for blocks
         const firstLine = lines[0].trim();
         const pathPattern = /((?:[\w.-]+\/)*[\w.-]+\.[\w.-]+)/;
         const lenientLineCommentRegex = new RegExp(`^(?://|#|--)\\s*.*?${pathPattern.source}`);
@@ -91,13 +101,27 @@ const CodeBlockRenderer: React.FC<CustomCodeBlockRendererProps> = ({
     }
 
     const canCompareFile = actualFilePathForComparison && parsedRepomixData?.fileContents[actualFilePathForComparison];
+    
+    // Language detection
     const matchLang = /language-(\w+)/.exec(className || '');
     const pathForLangGuess = actualFilePathForComparison || filePathFromComment;
-    const lang = matchLang ? matchLang[1] : (pathForLangGuess?.split('.').pop() || 'plaintext');
-    
+    let lang = 'plaintext'; // Default to plaintext
+    if (matchLang && matchLang[1]) {
+        lang = matchLang[1];
+    } else if (pathForLangGuess && !inline) { // Guess from path only for block code
+        const extension = pathForLangGuess.split('.').pop()?.toLowerCase();
+        if (extension) lang = extension; // Basic extension guess
+    }
+    // For more accurate language guessing based on extension, you might want a map:
+    // const langMap: { [key: string]: string } = { ts: 'typescript', js: 'javascript', py: 'python', ... };
+    // if (pathForLangGuess && !inline) lang = langMap[pathForLangGuess.split('.').pop() || ''] || 'plaintext';
+
+
     const isLikelySingleWordBlock = !inline && !matchLang && codeToRenderAndCopy.length > 0 && !codeToRenderAndCopy.includes(' ') && !codeToRenderAndCopy.includes('\n') && !filePathFromComment;
     if (isLikelySingleWordBlock) return <strong className="font-bold" {...rest}>{codeToRenderAndCopy}</strong>;
-    if (inline) return <code className="bg-[#e8eaed] px-[0.4em] py-[0.1em] rounded-[4px] font-mono text-[0.9em]" {...rest}>{children}</code>;
+    
+    // For inline code, use the processed rawCodeString or original children if preferred and simple
+    if (inline) return <code className="bg-[#e8eaed] px-[0.4em] py-[0.1em] rounded-[4px] font-mono text-[0.9em]" {...rest}>{rawCodeString}</code>;
 
     const handleCopyClick = () => {
       navigator.clipboard.writeText(codeToRenderAndCopy).then(() => {
@@ -130,23 +154,21 @@ const CodeBlockRenderer: React.FC<CustomCodeBlockRendererProps> = ({
     ) : null;
 
     let codeBlockElement: JSX.Element;
-    if (highlighter) {
+    if (highlighter && codeToRenderAndCopy) { // Added check for codeToRenderAndCopy
       try {
         const html = highlighter.codeToHtml(codeToRenderAndCopy, { lang, theme: 'material-theme-lighter' });
         codeBlockElement = <div className="!m-0" dangerouslySetInnerHTML={{ __html: html }} />;
       } catch (err) {
+        console.error(`[CodeBlockRenderer] Shikiji error (lang: ${lang}):`, err, "\nCode:", codeToRenderAndCopy.substring(0,100)+"...");
         codeBlockElement = <pre className="m-0 rounded-b-[6px] text-[0.9em] overflow-x-auto p-[10px] leading-[1.4] whitespace-pre bg-[#f8f8f8]"><code>{codeToRenderAndCopy}</code></pre>;
       }
     } else {
+      // Fallback if highlighter isn't ready or if there's no code to render
       codeBlockElement = <pre className="m-0 rounded-b-[6px] text-[0.9em] overflow-x-auto p-[10px] leading-[1.4] whitespace-pre bg-[#f8f8f8]"><code>{codeToRenderAndCopy}</code></pre>;
     }
 
-    // Add mt-2 for space above. Keep mb-4 for space below, even in full-width.
-    // If full-width, use negative horizontal margins.
     const wrapperClasses = `relative w-full mt-2 ${isParentBubbleFullWidth ? 'mx-[-15px] mb-2' : 'mb-4'}`;
-    // Note: If this is the *very last* element in the bubble, the bubble's own py-[10px] or py-[15px] will provide bottom padding.
-    // The mb-2 here ensures space if more text follows *after* this code block within the same bubble.
-
+    
     return (
       <div className={wrapperClasses}>
         <div className="flex justify-between items-center px-2 py-[4px] bg-[#f0f0f0] rounded-t-[6px] border-b border-[#e0e0e0]">
@@ -189,14 +211,13 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
   }, [history]);
 
   return (
-    <div className="flex flex-col gap-[15px]"> {/* .chat-interface */}
+    <div className="flex flex-col gap-[15px]">
       {history.map((message, index) => {
         const isModelMessage = message.role === 'model';
         const messageText = message.parts[0].text;
         
         const containsCodeBlock = isModelMessage && messageText.includes('```');
 
-        // Adjusted vertical padding for bubbles containing code blocks for more whitespace
         const bubbleVerticalPadding = containsCodeBlock ? 'py-[15px]' : 'py-[10px]';
         const bubbleBaseClasses = `px-[15px] ${bubbleVerticalPadding} rounded-[18px] leading-[1.5] break-words`;
         
@@ -224,15 +245,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
-                    code: (props: CodeBlockRendererPropsFromMarkdown) => (
+                    // Props received here (markdownProps) are from ReactMarkdown
+                    // They should conform to the expected types (like CodeBlockRendererPropsFromMarkdown with optional children)
+                    code: (markdownProps) => {
+                      // console.log("ReactMarkdown `code` props:", markdownProps); // For debugging
+                      return (
                         <CodeBlockRenderer
-                            {...props}
+                            {...markdownProps} // Pass all props from ReactMarkdown
+                            // Add specific props required by CustomCodeBlockRendererProps
                             isParentBubbleFullWidth={containsCodeBlock} 
                             highlighter={highlighter}
                             parsedRepomixData={parsedRepomixData}
                             onStartComparison={onStartComparison}
                         />
-                    ),
+                      );
+                    },
                   }}
                 >
                   {messageText}
@@ -249,7 +276,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
           </div>
         );
       })}
-      <div ref={bottomRef} style={{ height: '1px' }} /> {/* For scrolling */}
+      <div ref={bottomRef} style={{ height: '1px' }} />
     </div>
   );
 };
