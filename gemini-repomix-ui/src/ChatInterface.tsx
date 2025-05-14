@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { getHighlighter, bundledLanguages } from 'shikiji';
 import type { Highlighter } from 'shikiji';
 
-import { ChatMessage } from './App';
+import type { ChatMessage } from './types';
 import { ParsedRepomixData } from './utils/parseRepomix';
 
 const useShikijiHighlighter = () => {
@@ -196,7 +196,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
   useEffect(() => {
     if (history.length > 0) {
       const lastMessage = history[history.length - 1];
-      const scrollableArea = bottomRef.current?.closest('.scrollable-content-area'); 
+      const scrollableArea = bottomRef.current?.closest('.scrollable-content-area');
       if (lastMessage.role !== 'model' || history.length === 1) {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
       } else if (scrollableArea) {
@@ -215,12 +215,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
       {history.map((message, index) => {
         const isModelMessage = message.role === 'model';
         const messageText = message.parts[0].text;
-        
+
         const containsCodeBlock = isModelMessage && messageText.includes('```');
 
         const bubbleVerticalPadding = containsCodeBlock ? 'py-[15px]' : 'py-[10px]';
         const bubbleBaseClasses = `px-[15px] ${bubbleVerticalPadding} rounded-[18px] leading-[1.5] break-words`;
-        
+
         const userBubbleClasses = `bg-[#e1f5fe] self-end rounded-br-[4px] max-w-[80%]`;
         const modelBubbleBaseClasses = `bg-white border border-[#e0e0e0] self-start rounded-bl-[4px]`;
         const modelTextBubbleClasses = `max-w-[80%]`;
@@ -231,7 +231,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
         return (
           <div
             key={index}
-            className={`${bubbleBaseClasses} 
+            className={`${bubbleBaseClasses}
                        ${isModelMessage
                           ? `${modelBubbleBaseClasses} ${containsCodeBlock ? modelCodeContainingBubbleClasses : modelTextBubbleClasses}`
                           : userBubbleClasses
@@ -245,15 +245,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
-                    // Props received here (markdownProps) are from ReactMarkdown
-                    // They should conform to the expected types (like CodeBlockRendererPropsFromMarkdown with optional children)
                     code: (markdownProps) => {
-                      // console.log("ReactMarkdown `code` props:", markdownProps); // For debugging
                       return (
                         <CodeBlockRenderer
-                            {...markdownProps} // Pass all props from ReactMarkdown
-                            // Add specific props required by CustomCodeBlockRendererProps
-                            isParentBubbleFullWidth={containsCodeBlock} 
+                            {...markdownProps}
+                            isParentBubbleFullWidth={containsCodeBlock}
                             highlighter={highlighter}
                             parsedRepomixData={parsedRepomixData}
                             onStartComparison={onStartComparison}
@@ -265,7 +261,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
                   {messageText}
                 </ReactMarkdown>
               ) : (
-                messageText.split('\n').map((line, i, arr) => (
+                messageText.split('\n').map((line: string, i: number, arr: string[]) => ( // Explicit types added here
                   <React.Fragment key={i}>
                       {line}
                       {i < arr.length - 1 && <br />}
@@ -280,5 +276,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ history, parsedRepomixDat
     </div>
   );
 };
+
 
 export default ChatInterface;

@@ -1,6 +1,6 @@
 // src/services/api.ts
 
-import type { ChatMessage } from '../App'; // Assuming ChatMessage is in App.tsx, adjust if moved
+import type { ChatMessage } from '../types';
 import type { ClientGeminiModelInfo } from '../ModelSettings'; // Adjust path if needed
 import type { RepoInfo } from '../RepoSelector'; // Adjust path if needed
 import { supabase } from '../supabaseClient'; // Import supabase client
