@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { ComparisonViewData } from '../types';
 import type { ParsedRepomixData } from '../utils/parseRepomix';
 
-interface UseAppViewProps {
+export interface UseAppViewProps {
     parsedRepomixData: ParsedRepomixData | null;
     setGlobalError: (error: string | null) => void; // To set errors from comparison logic
 }

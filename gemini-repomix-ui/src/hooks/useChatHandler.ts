@@ -6,7 +6,7 @@ import type { ParsedRepomixData } from '../utils/parseRepomix';
 
 const MAX_HISTORY_TURNS = 10; // Max turns of history (user + model = 1 turn) sent to API
 
-interface UseChatHandlerProps {
+export interface UseChatHandlerProps {
     userHasGeminiKey: boolean | null;
     apiKeyStatusLoading: boolean;
     openApiKeyModal: () => void;

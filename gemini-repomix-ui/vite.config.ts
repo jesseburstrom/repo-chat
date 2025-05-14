@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite';
 
@@ -17,5 +17,11 @@ export default defineConfig({
         //rewrite: (path) => path.replace(/^\/api/, ''), // Remove /api prefix if backend doesn't expect it
       }
     }
-  }
+  },
+  test: { // Vitest config
+    globals: true,
+    environment: 'jsdom',
+    //setupFiles: './src/test/setup.ts', // Optional: for global mocks or config
+    // coverage: { provider: 'v8' } // Optional: for coverage
+  },
 })
