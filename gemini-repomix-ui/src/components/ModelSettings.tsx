@@ -1,6 +1,5 @@
 // gemini-repomix-ui/src/components/ModelSettings.tsx
 import React from 'react';
-// Removed: import './ModelSettings.css'; // Migrated to Tailwind
 
 export interface ClientGeminiModelInfo {
     displayName: string;
@@ -12,7 +11,7 @@ export interface ClientGeminiModelInfo {
 export interface TokenStats {
     inputTokens: number;
     outputTokens: number;
-    totalTokens: number;
+    totalTokens: number; // Can be derived, but often useful to have pre-calculated
     inputCost: number;
     outputCost: number;
     totalCost: number;
@@ -22,11 +21,11 @@ export interface TokenStats {
 interface ModelSettingsProps {
     availableModels: ClientGeminiModelInfo[];
     selectedModelCallName: string;
-    onModelChange: (modelCallName: string) => void;
+    onModelChange: (modelCallName: string) => void; // This is handleModelChange from useModels
     isLoadingModels: boolean;
     currentCallStats: TokenStats | null;
     totalSessionStats: TokenStats;
-    isChatLoading: boolean; // To disable select during chat
+    isChatLoading: boolean; // To disable select during chat processing
 }
 
 const ModelSettings: React.FC<ModelSettingsProps> = ({
@@ -45,17 +44,12 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
     const selectedModelDetails = availableModels.find(m => m.callName === selectedModelCallName);
 
     return (
-        // .model-settings-container
         <div className="px-[25px] py-[15px] border-b border-[#e0e0e0] bg-[#f8f9fa] flex flex-col gap-[15px]">
-            {/* .model-settings-container h3 */}
             <h3 className="mt-0 mb-[5px] text-[#333] font-medium text-[1.1em]">AI Model & Usage</h3>
-            {/* .model-selector-group */}
             <div className="flex items-center gap-[10px]">
-                {/* .model-selector-group label */}
                 <label htmlFor="modelSelect" className="text-[0.9em] text-[#5f6368] font-medium whitespace-nowrap">
                     Select Model:
                 </label>
-                {/* .model-selector-group select */}
                 <select
                     id="modelSelect"
                     value={selectedModelCallName}
@@ -72,25 +66,20 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                     ))}
                 </select>
             </div>
-            {/* .model-notes */}
+
             {selectedModelDetails?.notes && (
                 <div className="text-[0.8em] text-[#6c757d] mt-[2px] pl-[70px]">Note: {selectedModelDetails.notes}</div>
             )}
-            {/* Adding capabilities with same style */}
             {selectedModelDetails && (
                  <div className="text-[0.8em] text-[#6c757d] mt-[2px] pl-[70px]">Capabilities: {selectedModelDetails.capabilities}</div>
             )}
 
-            {/* .stats-display */}
             <div className="text-[0.85em] text-[#333] flex flex-col gap-[5px]">
                 <h4 className="font-semibold mb-1">Current Call:</h4>
                 {currentCallStats ? (
                     <>
-                        {/* .stat-line */}
                         <div className="flex justify-between">
-                            {/* .stat-line span:first-child */}
                             <span className="font-medium text-[#5f6368]">Model Used:</span>
-                            {/* .stat-line span:last-child */}
                             <span className="text-right">{currentCallStats.modelUsed || 'N/A'}</span>
                         </div>
                         <div className="flex justify-between">
@@ -103,11 +92,10 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                         </div>
                         <div className="flex justify-between">
                             <span className="font-medium text-[#5f6368]">Total Tokens:</span>
-                            <span className="text-right">{(currentCallStats.inputTokens + currentCallStats.outputTokens).toLocaleString()}</span>
+                            <span className="text-right">{(currentCallStats.totalTokens).toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
                             <span className="font-medium text-[#5f6368]">Est. Cost:</span>
-                            {/* .total-cost */}
                             <span className="text-right font-bold text-[#137333]">${currentCallStats.totalCost.toFixed(2)}</span>
                         </div>
                     </>
@@ -115,7 +103,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                     <div className="flex justify-between"><span>No call data yet.</span></div>
                 )}
 
-                <h4 className="font-semibold mb-1 mt-2">Session Totals:</h4> {/* Added mt-2 for spacing */}
+                <h4 className="font-semibold mb-1 mt-2">Session Totals:</h4>
                 <div className="flex justify-between">
                     <span className="font-medium text-[#5f6368]">Total Input Tokens:</span>
                     <span className="text-right">{totalSessionStats.inputTokens.toLocaleString()}</span>
@@ -126,7 +114,7 @@ const ModelSettings: React.FC<ModelSettingsProps> = ({
                 </div>
                 <div className="flex justify-between">
                     <span className="font-medium text-[#5f6368]">Grand Total Tokens:</span>
-                    <span className="text-right">{(totalSessionStats.inputTokens + totalSessionStats.outputTokens).toLocaleString()}</span>
+                    <span className="text-right">{(totalSessionStats.totalTokens).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
                     <span className="font-medium text-[#5f6368]">Est. Total Cost:</span>

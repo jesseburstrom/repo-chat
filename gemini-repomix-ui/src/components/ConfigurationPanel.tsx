@@ -3,14 +3,17 @@ import React from 'react';
 import RepomixForm from './RepomixForm';
 import RepoSelector from './RepoSelector';
 import ModelSettings from './ModelSettings';
-import { useRepomixContext } from '../contexts/RepomixContext';
+
+// Import the new context hooks
+import { useRepoFileManager } from '../contexts/RepoFileManagerContext';
+//import { useActiveRepomixData } from '../contexts/ActiveRepomixDataContext'; // To potentially clear data or influence UI
 import { useSystemPrompt } from '../hooks/useSystemPrompt';
 import { useModels } from '../hooks/useModels';
-import { UseApiKeyStatusReturn } from '../hooks/useApiKeyStatus'; // Import the return type
+import { UseApiKeyStatusReturn } from '../hooks/useApiKeyStatus';
 
 interface ConfigurationPanelProps {
     apiKeyStatus: Pick<UseApiKeyStatusReturn, 'userHasGeminiKey' | 'apiKeyStatusLoading' | 'openApiKeyModal'>;
-    isChatLoading: boolean; // from useChatHandler
+    isChatLoading: boolean; // from useChatHandler, passed down for ModelSettings
 }
 
 const controlPanelBaseClasses = "px-6 py-5 border border-[#e0e6ed] rounded-lg bg-white shadow-sm";
@@ -20,42 +23,83 @@ const statusMessageErrorClasses = "bg-[#fdedec] text-[#e74c3c] border-[#f5b7b1]"
 
 
 const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ apiKeyStatus, isChatLoading }) => {
+    // Consume from RepoFileManagerContext
     const {
-        generateRepomixFile, isLoading: repomixIsLoading, availableRepos, loadRepoFileContent,
-        selectedRepoFile, deleteRepomixFile, repoUrl, setRepoUrl,
-    } = useRepomixContext();
+        availableRepoFiles,
+        isLoadingRepoFiles,
+        // repoFilesError, // Error display handled at App level or CentralInteractionPanel
+        isGenerating,
+        // generationStatus, // Status display handled at App level or CentralInteractionPanel
+        deleteRepoFile,
+        selectedRepoFilename,
+        selectRepoFileForProcessing,
+        repoUrlForForm,
+        setRepoUrlForForm,
+        generateRepomixOutput,
+        isDeleting,
+    } = useRepoFileManager();
 
+    // Consume from ActiveRepomixDataContext (might not be strictly needed here if App.tsx handles orchestration)
+    // const { clearActiveData } = useActiveRepomixData(); // Example: could be used when deleting a file
+
+    // Consume from useSystemPrompt
     const {
         systemPrompt, setSystemPrompt, showSystemPromptInput, setShowSystemPromptInput,
         isLoadingPrompt, isSystemPromptSaving, systemPromptMessage, handleSaveSystemPrompt,
     } = useSystemPrompt();
 
+    // Consume from useModels
     const {
         availableModels, selectedModelCallName, handleModelChange: onModelChange,
         isLoadingModels, currentCallStats, totalSessionStats,
     } = useModels();
 
+    // Wrapper for generateRepomixOutput to also select the new file
+    const handleGenerateAndSelect = async (url: string, include: string, exclude: string) => {
+        const newFilename = await generateRepomixOutput(url, include, exclude);
+        if (newFilename) {
+            selectRepoFileForProcessing(newFilename); // Auto-select the newly generated file
+        }
+    };
+
+    // Wrapper for delete to potentially clear active data if the deleted file was active
+    const handleDeleteWithOrchestration = async (filename: string) => {
+        const success = await deleteRepoFile(filename);
+        if (success && selectedRepoFilename === filename) {
+            // The selectRepoFileForProcessing(null) in RepoFileManagerContext should handle clearing
+            // selectedRepoFilename, which App.tsx useEffect will pick up to clearActiveData.
+            // So, no direct call to clearActiveData needed here.
+        }
+        return success;
+    };
+
+
     return (
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6 lg:gap-[30px] pb-6 mb-6 border-b border-[#e7eaf3]">
             <div className="flex flex-col gap-6 lg:basis-1/2 w-full">
+                {/* Repomix Generation Form */}
                 <div className={controlPanelBaseClasses}>
                     <RepomixForm
-                        onGenerate={generateRepomixFile}
-                        isGenerating={repomixIsLoading && !selectedRepoFile} // Simplified condition
-                        repoUrl={repoUrl}
-                        onRepoUrlChange={setRepoUrl}
+                        onGenerate={handleGenerateAndSelect}
+                        isGenerating={isGenerating}
+                        repoUrl={repoUrlForForm}
+                        onRepoUrlChange={setRepoUrlForForm}
                     />
                 </div>
+
+                {/* Generated File Selector */}
                 <div className={controlPanelBaseClasses}>
                     <RepoSelector
-                        repos={availableRepos}
-                        onSelectRepo={loadRepoFileContent}
-                        isLoading={repomixIsLoading && !availableRepos.find(r => r.filename === selectedRepoFile)} // Simplified
-                        selectedValue={selectedRepoFile || ""}
-                        onDeleteRepo={deleteRepomixFile}
-                        isDeleting={repomixIsLoading && !!selectedRepoFile} // Simplified
+                        repos={availableRepoFiles}
+                        onSelectRepo={selectRepoFileForProcessing} // This now just selects the filename
+                        isLoading={isLoadingRepoFiles}
+                        selectedValue={selectedRepoFilename || ""}
+                        onDeleteRepo={handleDeleteWithOrchestration}
+                        isDeleting={isDeleting}
                     />
                 </div>
+
+                {/* System Prompt Settings */}
                 <div className={`${controlPanelBaseClasses}`}>
                     <h3 className="text-lg font-semibold text-[#34495e] mt-0 mb-5">System Prompt</h3>
                     <button
@@ -91,6 +135,8 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ apiKeyStatus, i
                     )}
                 </div>
             </div>
+
+            {/* Model Settings and API Key Status */}
             <div className="flex flex-col gap-6 lg:basis-1/2 w-full">
                 <div className={controlPanelBaseClasses}>
                     <ModelSettings
@@ -100,7 +146,7 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({ apiKeyStatus, i
                         isLoadingModels={isLoadingModels}
                         currentCallStats={currentCallStats}
                         totalSessionStats={totalSessionStats}
-                        isChatLoading={isChatLoading}
+                        isChatLoading={isChatLoading} // Propagated from App -> CentralInteractionPanel -> here
                     />
                 </div>
                  {apiKeyStatus.userHasGeminiKey === false && !apiKeyStatus.apiKeyStatusLoading && (

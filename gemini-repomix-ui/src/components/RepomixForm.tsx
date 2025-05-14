@@ -1,27 +1,30 @@
 // gemini-repomix-ui/src/components/RepomixForm.tsx
-import React, { useState } from 'react';
+import React, { useState, FormEvent } from 'react'; // Removed useEffect as it's not used
 
 interface RepomixFormProps {
-    onGenerate: (repoUrl: string, includePatterns: string, excludePatterns: string) => void;
+    // onGenerate now matches the signature of handleGenerateAndSelect in ConfigurationPanel
+    onGenerate: (repoUrl: string, includePatterns: string, excludePatterns: string) => Promise<void>;
     isGenerating: boolean;
-    repoUrl: string; // ++ Receive repoUrl as a prop
-    onRepoUrlChange: (url: string) => void; // ++ Receive handler to change repoUrl
+    repoUrl: string; // This prop comes from repoUrlForForm in RepoFileManagerContext via ConfigurationPanel
+    onRepoUrlChange: (url: string) => void; // This prop calls setRepoUrlForForm in RepoFileManagerContext via ConfigurationPanel
 }
 
 const RepomixForm: React.FC<RepomixFormProps> = ({
     onGenerate,
     isGenerating,
-    repoUrl, // ++ Use prop
-    onRepoUrlChange, // ++ Use prop
+    repoUrl,
+    onRepoUrlChange,
 }) => {
-    // Removed internal formRepoUrl state
+    // Include/Exclude patterns are local to this form as they are specific to a single generation action.
     const [includePatterns, setIncludePatterns] = useState('**/*.css,**/*.dart,**/*.ts,**/*.tsx,**/*.py,**/*.cs,**/*.go');
     const [excludePatterns, setExcludePatterns] = useState('*.log,tmp/');
 
-    const handleSubmit = (event: React.FormEvent) => {
+    const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
-        if (repoUrl.trim() && !isGenerating) { // ++ Use prop repoUrl
-            onGenerate(repoUrl, includePatterns, excludePatterns); // ++ Use prop repoUrl
+        if (repoUrl.trim() && !isGenerating) {
+            // No need to await here unless you want to do something after onGenerate finishes *within this component*
+            // The parent (ConfigurationPanel) will handle the promise from generateRepomixOutput.
+            onGenerate(repoUrl, includePatterns, excludePatterns);
         }
     };
 
@@ -36,8 +39,8 @@ const RepomixForm: React.FC<RepomixFormProps> = ({
                     <input
                         type="url"
                         id="repoUrl"
-                        value={repoUrl} // ++ Bind to prop
-                        onChange={(e) => onRepoUrlChange(e.target.value)} // ++ Call prop handler
+                        value={repoUrl}
+                        onChange={(e) => onRepoUrlChange(e.target.value)}
                         placeholder="https://github.com/user/repo.git"
                         required
                         disabled={isGenerating}
@@ -77,7 +80,7 @@ const RepomixForm: React.FC<RepomixFormProps> = ({
 
                 <button
                     type="submit"
-                    disabled={isGenerating || !repoUrl.trim()} // ++ Use prop repoUrl for disabled check
+                    disabled={isGenerating || !repoUrl.trim()}
                     className="self-start mt-2 bg-[#1a73e8] text-white rounded-[4px] px-[15px] py-[10px] cursor-pointer font-medium text-base transition-colors duration-200 ease-in-out hover:enabled:bg-[#185abc] disabled:bg-[#ccc] disabled:cursor-not-allowed disabled:opacity-70"
                 >
                     {isGenerating ? 'Generating...' : 'Generate Description File'}
