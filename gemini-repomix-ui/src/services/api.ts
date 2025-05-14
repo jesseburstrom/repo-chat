@@ -13,35 +13,54 @@ interface BaseResponse {
     error?: string;
 }
 
+// --- Load System Prompt ---
 interface LoadSystemPromptResponse extends BaseResponse {
     systemPrompt?: string;
 }
 
+// --- Save System Prompt ---
 interface SaveSystemPromptResponse extends BaseResponse {
     message?: string;
 }
 
+// --- Gemini Config ---
 interface GeminiConfigResponse extends BaseResponse {
     models?: ClientGeminiModelInfo[];
     currentModelCallName?: string;
 }
 
-interface ListGeneratedFilesResponse extends BaseResponse {
+// --- List Generated Files ---
+// The 'data' field for listGeneratedFiles will be an array of RepoInfo
+// RepoInfo is typically { filename: string; repoIdentifier: string; }
+// This type is imported from '../RepoSelector'
+export interface ListGeneratedFilesResponse extends BaseResponse {
     data?: RepoInfo[];
 }
 
+// --- Get File Content ---
 interface GetFileContentResponse extends BaseResponse {
     content?: string;
 }
 
-interface RunRepomixResponse extends BaseResponse {
-    message?: string;
-    outputFilename?: string;
-    stderr?: string; // For debugging
-    stdout?: string; // For debugging
+// --- Run Repomix ---
+// This is the structure of the 'data' field within RunRepomixResponse if successful
+interface RunRepomixSuccessData {
+    newFile: { filename: string; repoIdentifier: string };
+    message: string;
 }
 
-export interface GeminiApiResponse extends BaseResponse { // Exporting as App.tsx uses it
+// This is the overall response structure from /api/run-repomix
+// This interface needs to be EXPORTED to be used in other files like RepomixContext.tsx
+export interface RunRepomixResponse extends BaseResponse {
+    data?: RunRepomixSuccessData; // The 'data' field is optional and contains the actual payload
+    stderr?: string;
+    stdout?: string;
+}
+
+
+// --- Call Gemini ---
+// Exporting as App.tsx might use it, and it's good practice for shared types
+export interface GeminiApiResponse extends BaseResponse {
     text?: string;
     inputTokens?: number;
     outputTokens?: number;
@@ -69,6 +88,7 @@ async function handleCriticalAuthError(errorMessage?: string) {
         console.error('[api.ts] Error during forced signOut after API auth failure:', signOutError);
     }
     // onAuthStateChange in AuthContext should handle redirecting to login.
+    // No need to redirect here, just ensure state is cleared.
 }
 
 // --- Common API Request Function ---
@@ -81,11 +101,10 @@ async function makeApiRequest<T extends BaseResponse>(url: string, options: Requ
 
     if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
-    } else {
-        // Log if a protected endpoint is called without a token,
-        // but let the backend return 401/403 to confirm.
+    } else if (!url.includes('/user-config/')) { // Allow user-config routes to proceed for initial key setup if unauthed, backend will still check
         console.warn(`[api.ts] No access token found in session for request to: ${url}. Request will proceed without Authorization header.`);
     }
+
 
     let response: Response;
     try {
@@ -95,47 +114,41 @@ async function makeApiRequest<T extends BaseResponse>(url: string, options: Requ
         return { success: false, error: networkError.message || "Network connection failed." } as T;
     }
 
-    // Handle 401 (Unauthorized) and 403 (Forbidden) - typically critical auth issues
     if (response.status === 401 || response.status === 403) {
-        const errorText = await response.text();
+        const errorText = await response.text().catch(() => `Access Denied (Status: ${response.status})`);
         let errorJsonMessage = `Access Denied (Status: ${response.status})`;
         try {
             const parsedError = JSON.parse(errorText);
             errorJsonMessage = parsedError.error || errorJsonMessage;
         } catch (e) {
-            console.warn(`[api.ts] Could not parse ${response.status} error response as JSON:`, errorText);
-            if (errorText.trim()) errorJsonMessage = errorText.trim(); // Use raw text if not JSON and not empty
+            if (errorText.trim()) errorJsonMessage = errorText.trim();
         }
-
-        await handleCriticalAuthError(errorJsonMessage);
+        // Avoid calling signOut for specific 403s that might be Gemini key related, not session related
+        if (!errorJsonMessage.toLowerCase().includes("gemini api key")) {
+            await handleCriticalAuthError(errorJsonMessage);
+        }
         return { success: false, error: errorJsonMessage } as T;
     }
 
-    // Handle 402 (Payment Required) - typically API key or quota issues, not critical auth
-    if (response.status === 402) {
-        const errorText = await response.text();
+    if (response.status === 402) { // Payment Required - typically API key or quota
+        const errorText = await response.text().catch(() => `Operation requires payment/quota (Status: ${response.status})`);
         let errorJsonMessage = `Operation requires a valid API key or sufficient quota (Status: ${response.status})`;
         try {
             const parsedError = JSON.parse(errorText);
             errorJsonMessage = parsedError.error || errorJsonMessage;
         } catch (e) {
-            console.warn(`[api.ts] Could not parse 402 error response as JSON:`, errorText);
             if (errorText.trim()) errorJsonMessage = errorText.trim();
         }
-        console.warn(`[api.ts] API key or quota issue for ${url}:`, errorJsonMessage);
-        // Don't force sign out for 402, let the UI handle prompting for the key or informing the user.
         return { success: false, error: errorJsonMessage } as T;
     }
 
-    // Handle other non-OK responses
-    if (!response.ok) {
-        const errorText = await response.text();
+    if (!response.ok) { // Other non-2xx errors
+        const errorText = await response.text().catch(() => `API request failed (Status: ${response.status})`);
         let errorJsonMessage = `API request failed (Status: ${response.status})`;
         try {
             const parsedError = JSON.parse(errorText);
             errorJsonMessage = parsedError.error || errorJsonMessage;
         } catch (e) {
-            console.warn(`[api.ts] Could not parse non-2xx error response as JSON:`, errorText);
             if (errorText.trim()) errorJsonMessage = errorText.trim();
         }
         return { success: false, error: errorJsonMessage } as T;
@@ -143,9 +156,13 @@ async function makeApiRequest<T extends BaseResponse>(url: string, options: Requ
 
     // Handle successful responses
     const responseText = await response.text();
-    if (!responseText) { // Handle empty successful response (e.g., HTTP 204 No Content)
+    if (!responseText && response.status === 204) { // HTTP 204 No Content is a success
         return { success: true } as T;
     }
+    if (!responseText && response.ok) { // Other empty successful responses (e.g. 200 OK with empty body)
+        return { success: true } as T;
+    }
+
     try {
         return JSON.parse(responseText) as T;
     } catch (jsonParseError) {
@@ -172,6 +189,7 @@ export async function fetchGeminiConfig(): Promise<GeminiConfigResponse> {
     return makeApiRequest<GeminiConfigResponse>(`${API_PREFIX}/api/gemini-config`);
 }
 
+// The function now correctly uses ListGeneratedFilesResponse which expects `data?: RepoInfo[]`
 export async function listGeneratedFiles(): Promise<ListGeneratedFilesResponse> {
     return makeApiRequest<ListGeneratedFilesResponse>(`${API_PREFIX}/api/list-generated-files`);
 }
@@ -185,6 +203,7 @@ interface RunRepomixParams {
     includePatterns?: string;
     excludePatterns?: string;
 }
+// The function itself correctly uses the (now exported) RunRepomixResponse type
 export async function runRepomix(params: RunRepomixParams): Promise<RunRepomixResponse> {
     return makeApiRequest<RunRepomixResponse>(`${API_PREFIX}/api/run-repomix`, {
         method: 'POST',
@@ -195,8 +214,8 @@ export async function runRepomix(params: RunRepomixParams): Promise<RunRepomixRe
 interface CallGeminiParams {
     history: ChatMessage[];
     newMessage: string;
-    systemPrompt?: string;
-    modelCallName?: string;
+    // systemPrompt is handled by backend now and fetched from user's DB settings
+    modelCallName?: string; // Client can suggest a model for this one call
 }
 export async function callGemini(params: CallGeminiParams): Promise<GeminiApiResponse> {
     return makeApiRequest<GeminiApiResponse>(`${API_PREFIX}/api/call-gemini`, {
@@ -213,6 +232,16 @@ export async function getGeminiApiKeyStatus(): Promise<GeminiKeyStatusResponse> 
 export async function setGeminiApiKey(apiKey: string): Promise<SetGeminiKeyResponse> {
     return makeApiRequest<SetGeminiKeyResponse>(`${API_PREFIX}/api/user-config/gemini-key`, {
         method: 'POST',
-        body: JSON.stringify({ apiKey }), // Backend expects { apiKey: "the_key" }
+        body: JSON.stringify({ apiKey }),
+    });
+}
+
+export interface DeleteFileApiResponse extends BaseResponse { // BaseResponse has success and error?
+    message?: string;
+}
+
+export async function deleteGeneratedFile(filename: string): Promise<DeleteFileApiResponse> {
+    return makeApiRequest<DeleteFileApiResponse>(`${API_PREFIX}/api/delete-file/${encodeURIComponent(filename)}`, {
+        method: 'DELETE',
     });
 }

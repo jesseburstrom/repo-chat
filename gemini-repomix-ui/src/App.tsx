@@ -7,19 +7,18 @@ import RepoSelector from './RepoSelector';
 import FileTree from './FileTree';
 import FileContentDisplay from './FileContentDisplay';
 import ModelSettings from './ModelSettings';
-// No App.css import needed
 
-// Import custom hooks
+// Import custom hooks & contexts
 import { useSystemPrompt } from './hooks/useSystemPrompt';
 import { useModels } from './hooks/useModels';
-import { useRepomix } from './hooks/useRepomix';
-
 import { useAuth } from './contexts/AuthContext';
+import { useRepomixContext } from './contexts/RepomixContext'; // Import context hook
+
 import AuthForm from './AuthForm';
 import ApiKeyModal from './ApiKeyModal';
 
 // Import API service and types
-import * as api from './services/api';
+import * as api from './services/api'; // Keep for API key status, callGemini
 
 export interface ChatMessage {
   role: "user" | "model";
@@ -32,22 +31,34 @@ interface ComparisonViewData {
     suggestedContent: string;
 }
 
-const MAX_HISTORY_TURNS = 10;
+const MAX_HISTORY_TURNS = 10; // Max turns of history (user + model = 1 turn) sent to API
 
 function App() {
     const { session, user, signOut, isLoading: authIsLoading } = useAuth();
+    const {
+        availableRepos, selectedRepoFile, parsedRepomixData, isLoading: repomixIsLoading,
+        error: repomixError, attachmentStatus, selectedFilePathForView,
+        selectedFileContentForView, promptSelectedFilePaths, allFilePathsInCurrentRepomix,
+        generateRepomixFile, loadRepoFileContent, handleManualFileAttach,
+        selectFileForViewing, togglePromptSelectedFile, selectAllPromptFiles, deselectAllPromptFiles,
+        clearCurrentRepomixData,
+        deleteRepomixFile, // Get from context
+        
+    } = useRepomixContext();
+
     // --- UI State ---
     const [comparisonView, setComparisonView] = useState<ComparisonViewData | null>(null);
     const [isFullScreenView, setIsFullScreenView] = useState(false);
     const [chatIsLoading, setChatIsLoading] = useState(false);
     const [chatError, setChatError] = useState<string | null>(null);
+    const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
     // --- API Key State ---
     const [userHasGeminiKey, setUserHasGeminiKey] = useState<boolean | null>(null);
     const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
     const [apiKeyStatusLoading, setApiKeyStatusLoading] = useState<boolean>(true);
 
-    // --- Custom Hooks ---
+    // --- Custom Hooks for other features ---
     const {
         systemPrompt, setSystemPrompt, showSystemPromptInput, setShowSystemPromptInput,
         isLoadingPrompt, isSystemPromptSaving, systemPromptMessage, handleSaveSystemPrompt,
@@ -56,20 +67,9 @@ function App() {
     const {
         availableModels, selectedModelCallName, isLoadingModels, modelError,
         handleModelChange, currentCallStats, totalSessionStats, recordCallStats,
-        resetCurrentCallStats,
+        resetCurrentCallStats, updateGeminiConfig
     } = useModels();
 
-    const {
-        repoUrl, onRepoUrlChange, handleGenerateRepomixFile, isGenerating,
-        generationMessage, generationError, availableRepos, isLoadingRepos, repoListError,
-        selectedRepoFile, loadRepoFileContent, isLoadingFileContent, fileContentError,
-        handleManualFileAttach, attachedFileName, parsedRepomixData, selectedFilePathForView,
-        selectedFileContentForView, isLoadingSelectedFileForView, handleSelectFileForViewing,
-        promptSelectedFilePaths, handleTogglePromptSelectedFile, handleSelectAllPromptFiles,
-        handleDeselectAllPromptFiles, allFilePathsInCurrentRepomix, attachmentStatus
-    } = useRepomix();
-
-    const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
     // --- Effect for checking Gemini API Key status ---
     useEffect(() => {
@@ -86,38 +86,42 @@ function App() {
                     }
                 } else {
                     console.error("[App] Failed to get API key status:", statusResult.error);
-                    setChatError("Could not verify Gemini API key status.");
-                    setUserHasGeminiKey(false);
+                    setChatError("Could not verify Gemini API key status."); // Show error to user
+                    setUserHasGeminiKey(false); // Assume no key on error
                 }
                 setApiKeyStatusLoading(false);
-            } else if (!session && !authIsLoading) {
+            } else if (!session && !authIsLoading) { // If no session and auth is done
                  setUserHasGeminiKey(null);
                  setShowApiKeyModal(false);
                  setApiKeyStatusLoading(false);
             }
         };
         checkApiKeyStatus();
-    }, [session, user, authIsLoading]);
+    }, [session, user, authIsLoading]); // Re-check when session/auth state changes
 
     // --- Callback for API Key Modal ---
     const handleApiKeySubmitted = useCallback(() => {
-        if (session && user && !authIsLoading) {
+        if (session && user && !authIsLoading) { // Ensure user and session exist
             setApiKeyStatusLoading(true);
             api.getGeminiApiKeyStatus().then(statusResult => {
                 if (statusResult.success) {
                     setUserHasGeminiKey(statusResult.hasKey ?? false);
                     if (statusResult.hasKey) {
                         setShowApiKeyModal(false);
-                        setChatError(null);
+                        setChatError(null); // Clear previous errors
+                        updateGeminiConfig(); // Refresh model config as key might enable new models
                     }
+                } else {
+                     console.error("[App] Error re-checking API key status after submission:", statusResult.error);
+                     // Potentially set an error message for the user here
                 }
                 setApiKeyStatusLoading(false);
             }).catch(err => {
-                console.error("[App] Error re-checking API key status after submission:", err);
+                console.error("[App] Exception re-checking API key status after submission:", err);
                 setApiKeyStatusLoading(false);
             });
         }
-    }, [session, user, authIsLoading]);
+    }, [session, user, authIsLoading, updateGeminiConfig]);
 
     // --- Effect to manage Fullscreen state ---
     useEffect(() => {
@@ -126,15 +130,16 @@ function App() {
         }
     }, [parsedRepomixData, comparisonView]);
 
+
     // --- Global Error Aggregation ---
-    const globalError = modelError || repoListError || fileContentError || chatError || generationError;
+    const globalError = modelError || repomixError || chatError;
 
     // --- Toggle Fullscreen ---
     const toggleFullScreenView = () => {
         if (parsedRepomixData || comparisonView) {
             setIsFullScreenView(prev => !prev);
         } else {
-            setIsFullScreenView(false);
+            setIsFullScreenView(false); // Ensure it's false if no data
         }
     };
 
@@ -142,7 +147,7 @@ function App() {
     const handleStartComparison = (filePath: string, suggestedContent: string) => {
         if (parsedRepomixData?.fileContents[filePath]) {
             setComparisonView({ filePath, originalContent: parsedRepomixData.fileContents[filePath], suggestedContent });
-            setIsFullScreenView(true);
+            setIsFullScreenView(true); // Auto-enter fullscreen for comparison
         } else {
             setChatError(`Original content for ${filePath} not found for comparison.`);
         }
@@ -151,16 +156,18 @@ function App() {
 
     // --- Prompt Submission Logic ---
     const handlePromptSubmit = useCallback(async (prompt: string) => {
-        // (API Key checks remain the same)
         if (userHasGeminiKey === false) {
             setChatError("Gemini API Key is not set. Please set your API key.");
             setShowApiKeyModal(true); return;
         }
-        if (userHasGeminiKey === null && !apiKeyStatusLoading) {
+        if (userHasGeminiKey === null && !apiKeyStatusLoading) { // Status check failed or pending
             setChatError("Could not verify API key status. Please try again or set your key.");
             setShowApiKeyModal(true); return;
         }
-        if (!prompt && !parsedRepomixData && promptSelectedFilePaths.length === 0) {
+
+        const currentAttachedFileName = parsedRepomixData && selectedRepoFile ? selectedRepoFile : null;
+
+        if (!prompt.trim() && !parsedRepomixData && promptSelectedFilePaths.length === 0) {
             setChatError("Please type a prompt, attach a file, or select files from the tree.");
             return;
         }
@@ -169,9 +176,8 @@ function App() {
         setChatError(null);
         resetCurrentCallStats();
 
-        // (Context/Prompt building logic remains the same)
         let filesToIncludeInPromptSegment = "";
-        if (promptSelectedFilePaths.length > 0 && parsedRepomixData) {
+        if (promptSelectedFilePaths.length > 0 && parsedRepomixData?.fileContents) {
             let selectedFilesContentParts: string[] = [];
             promptSelectedFilePaths.forEach(path => {
                 const content = parsedRepomixData.fileContents[path];
@@ -183,32 +189,35 @@ function App() {
                 filesToIncludeInPromptSegment = `<selected_repository_files>\n${selectedFilesContentParts.join('\n')}\n</selected_repository_files>`;
             }
         }
-        let contextContent = "";
+
         let contextDescriptor = "";
         if (filesToIncludeInPromptSegment) {
-            contextContent = filesToIncludeInPromptSegment;
             contextDescriptor = `(Using ${promptSelectedFilePaths.length} selected files)`;
-        } else if (parsedRepomixData) {
-            contextDescriptor = attachedFileName ? `(Context: ${attachedFileName})` : "(General context)";
-        } else if (attachedFileName) {
-            contextDescriptor = `(Regarding file: ${attachedFileName})`;
+        } else if (parsedRepomixData && currentAttachedFileName) {
+            contextDescriptor = `(Context: ${currentAttachedFileName})`;
+        } else if (currentAttachedFileName) { // Manually attached file, parsedRepomixData might be null
+             contextDescriptor = `(Regarding file: ${currentAttachedFileName})`;
         }
+
+
         let combinedPromptForApi = "";
-        if (contextContent) {
-            combinedPromptForApi += `Context from selected repository files:\n${contextContent}\n\n`;
+        if (filesToIncludeInPromptSegment) {
+            combinedPromptForApi += `Context from selected repository files:\n${filesToIncludeInPromptSegment}\n\n`;
         }
         combinedPromptForApi += prompt ? `User Prompt: ${prompt}` : (contextDescriptor ? `User Prompt: Please analyze the ${contextDescriptor}.` : `User Prompt: Please analyze.`);
 
         const userDisplayPrompt = prompt || contextDescriptor || "Analyze request";
         const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userDisplayPrompt }] };
+
+        // Prepare history for backend (limit turns)
         const historyForBackend: ChatMessage[] = chatHistory.slice(-MAX_HISTORY_TURNS * 2).map(msg => ({ role: msg.role, parts: msg.parts }));
         setChatHistory(prev => [...prev, newUserMessage]);
 
-        // (API call and response handling remain the same)
         const result = await api.callGemini({
             history: historyForBackend,
             newMessage: combinedPromptForApi,
-            modelCallName: selectedModelCallName,
+            // systemPrompt is now handled by backend using user's stored preference
+            modelCallName: selectedModelCallName, // User's current UI selection
         });
 
         if (result.success && result.text) {
@@ -228,17 +237,18 @@ function App() {
         } else {
             const errorMessage = result.error || "Gemini API call failed.";
             setChatError(`Error: ${errorMessage}`);
-            if (errorMessage.toLowerCase().includes("api key") || errorMessage.toLowerCase().includes("permission_denied") || result.error?.includes("402")) {
-                setUserHasGeminiKey(false);
+            // If API key related error, trigger modal
+            if (errorMessage.toLowerCase().includes("api key") || errorMessage.toLowerCase().includes("permission_denied") || result.error?.includes("402") || result.error?.includes("403")) {
+                setUserHasGeminiKey(false); // Assume key is invalid or missing
                 setShowApiKeyModal(true);
             }
-            setChatHistory(prev => prev.slice(0, -1));
+            setChatHistory(prev => prev.slice(0, -1)); // Remove the user's pending message
         }
         setChatIsLoading(false);
 
     }, [
         chatHistory, selectedModelCallName, recordCallStats, resetCurrentCallStats,
-        parsedRepomixData, promptSelectedFilePaths, attachedFileName,
+        parsedRepomixData, promptSelectedFilePaths, selectedRepoFile,
         userHasGeminiKey, apiKeyStatusLoading
     ]);
 
@@ -252,12 +262,33 @@ function App() {
                  return `${promptSelectedFilePaths.length} file(s) selected for prompt`;
             }
         }
-        return attachedFileName;
-    }, [promptSelectedFilePaths, allFilePathsInCurrentRepomix, attachedFileName]);
+        // If a repo file is selected from dropdown and parsed
+        if (selectedRepoFile && parsedRepomixData) {
+            return selectedRepoFile;
+        }
+        // If a file was manually attached and parsed
+        if (!selectedRepoFile && parsedRepomixData && attachmentStatus?.startsWith("Attached & Parsed")) {
+             // Try to extract a name; this logic might need refinement based on how manual attach sets names
+            return attachmentStatus.replace("Attached & Parsed ", "").replace(" successfully.", "") || "Manually attached file";
+        }
+        return null; // No specific file or selection for display
+    }, [promptSelectedFilePaths, allFilePathsInCurrentRepomix, selectedRepoFile, parsedRepomixData, attachmentStatus]);
+
 
     // --- Combined Loading State ---
-    const anyLoading = chatIsLoading || isGenerating || isLoadingFileContent || isLoadingModels ||
-                       isLoadingSelectedFileForView || isLoadingRepos || isSystemPromptSaving || apiKeyStatusLoading || isLoadingPrompt;
+    const anyLoading = chatIsLoading || repomixIsLoading || isLoadingModels ||
+                       isLoadingPrompt || isSystemPromptSaving || apiKeyStatusLoading;
+
+    // --- SignOut Handler ---
+    const handleSignOut = async () => {
+        await signOut();
+        // Clear local states that might persist across users if not careful
+        setChatHistory([]);
+        setSystemPrompt(''); // Reset system prompt from hook if not auto-reset by hook on auth change
+        clearCurrentRepomixData(); // Clear repomix context data
+        // Other state resets as needed
+    };
+
 
     // --- Loading/Auth Checks ---
     if (authIsLoading || (session && apiKeyStatusLoading && userHasGeminiKey === null) ) {
@@ -269,18 +300,18 @@ function App() {
 
     // --- Tailwind Class Definitions ---
     const appContainerBaseClasses = "flex flex-col h-screen bg-white border border-[#e7eaf3] overflow-hidden";
-    const appContainerNormalClasses = "w-[80%] mx-auto rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.08),_0_1px_3px_rgba(0,0,0,0.05)]";
-    const appContainerFullscreenClasses = "w-full max-w-none m-0 border-none rounded-none shadow-none";
+    const appContainerNormalClasses = "w-[80%] mx-auto my-[30px] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.08),_0_1px_3px_rgba(0,0,0,0.05)] h-[calc(100vh_-_60px)]"; // Added my-[30px] and adjusted height
+    const appContainerFullscreenClasses = "w-full max-w-none m-0 border-none rounded-none shadow-none h-screen"; // Full height for fullscreen
 
     const mainContentWrapperBaseClasses = "flex flex-row flex-grow overflow-hidden";
-    const mainContentWrapperHeight = "h-[calc(100vh_-_70px_-_45px)]";
-    const fullscreenMainContentHeight = "h-[calc(100vh_-_70px)]";
+    // Adjusted height calculation for normal view to account for header/footer and potential margins
+    const mainContentWrapperHeight = "h-[calc(100%_-_70px_-_45px)]"; // 100% of parent - header - footer
+    const fullscreenMainContentHeight = "h-[calc(100vh_-_70px_-_0px)]"; // Fullscreen, no footer visible perhaps, or footer is overlayed or context-dependent
 
-    // ---- FULLSCREEN CLASSES FOR 3-PANEL LAYOUT (File Tree, Chat, File Viewer) ----
-    const fileTreeFullscreenClasses = "w-[22%] max-w-[450px] h-full flex-shrink-0"; // Added flex-shrink-0
-    const centerColumnFullscreenClasses = "flex-1 h-full flex flex-col overflow-hidden border-l border-r border-[#e7eaf3]"; // CHANGED: w-[38%] flex-shrink-0 -> flex-1
-    const fileContentPanelFullscreenClasses = "flex-1 h-full overflow-hidden border-l border-[#e7eaf3]"; // CHANGED: Added border-l (was implicit before), kept flex-1
-    // ---- NEW CLASSES FOR 2-PANEL FULLSCREEN COMPARISON LAYOUT (Chat 1/3, Comparison 2/3) ----
+
+    const fileTreeFullscreenClasses = "w-[22%] max-w-[450px] h-full flex-shrink-0";
+    const centerColumnFullscreenClasses = "flex-1 h-full flex flex-col overflow-hidden border-l border-r border-[#e7eaf3]";
+    const fileContentPanelFullscreenClasses = "flex-1 h-full overflow-hidden border-l border-[#e7eaf3]";
     const chatColumnForComparisonViewClasses = "flex-1 h-full flex flex-col overflow-hidden border-r border-[#e7eaf3]";
     const comparisonPanelForComparisonViewClasses = "flex-[2_1_0%] h-full overflow-hidden";
 
@@ -313,9 +344,9 @@ function App() {
                             ⚠️ Set API Key
                         </button>
                     )}
-                    {user && user.email && <span className="text-sm text-[#5a6e87] whitespace-nowrap">{user.email}</span>}
+                    {user && user.email && <span className="text-sm text-[#5a6e87] whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]" title={user.email}>{user.email}</span>}
                     {user && (
-                        <button onClick={signOut} className={`${headerActionButtonBaseClasses} text-[#e74c3c] bg-transparent border-[#f5b7b1] hover:enabled:bg-[#fdedec] hover:enabled:text-[#cb4335] hover:enabled:border-[#f1948a]`}>
+                        <button onClick={handleSignOut} className={`${headerActionButtonBaseClasses} text-[#e74c3c] bg-transparent border-[#f5b7b1] hover:enabled:bg-[#fdedec] hover:enabled:text-[#cb4335] hover:enabled:border-[#f1948a]`}>
                             Logout
                         </button>
                     )}
@@ -324,7 +355,7 @@ function App() {
                             onClick={toggleFullScreenView}
                             className={headerActionButtonBaseClasses}
                             title={isFullScreenView ? "Exit Full Screen View" : "Expand File View"}
-                            disabled={anyLoading && isFullScreenView}
+                            disabled={anyLoading && isFullScreenView} // Prevent collapsing while loading in FS
                         >
                             {isFullScreenView ? '📰 Collapse' : '↔️ Expand'}
                         </button>
@@ -333,60 +364,52 @@ function App() {
             </header>
 
             <div className={`${mainContentWrapperBaseClasses} ${isFullScreenView ? fullscreenMainContentHeight : mainContentWrapperHeight}`}>
-                {/* File Tree (Conditional on Fullscreen) */}
                 {parsedRepomixData && isFullScreenView && !comparisonView && (
-                    // Apply fixed width and flex-shrink-0
                     <div className={fileTreeFullscreenClasses}>
                       <FileTree
                           structure={parsedRepomixData.directoryStructure}
                           selectedFilePath={selectedFilePathForView}
-                          onSelectFile={handleSelectFileForViewing}
+                          onSelectFile={selectFileForViewing}
                           promptSelectedFilePaths={promptSelectedFilePaths}
-                          onTogglePromptSelectedFile={handleTogglePromptSelectedFile}
-                          onSelectAllPromptFiles={handleSelectAllPromptFiles}
-                          onDeselectAllPromptFiles={handleDeselectAllPromptFiles}
+                          onTogglePromptSelectedFile={togglePromptSelectedFile}
+                          onSelectAllPromptFiles={selectAllPromptFiles}
+                          onDeselectAllPromptFiles={deselectAllPromptFiles}
                       />
                     </div>
                 )}
 
-                 {/* Center Column */}
-                <div className={`flex flex-col overflow-hidden h-full /* Base for structure */
+                <div className={`flex flex-col overflow-hidden h-full
                                  ${isFullScreenView
                                     ? (comparisonView
-                                        ? chatColumnForComparisonViewClasses  // FS + Comparison: Chat takes 1/3
-                                        : centerColumnFullscreenClasses       // FS + No Comparison (3-panel): Chat is flex-1
+                                        ? chatColumnForComparisonViewClasses
+                                        : centerColumnFullscreenClasses
                                       )
-                                    : 'flex-grow border-r border-[#e7eaf3]' // Not Fullscreen: Default full width behavior
+                                    : 'flex-grow border-r border-[#e7eaf3]'
                                  }`}
                 >
-                    {/* Scrollable Area within Center Column */}
-                    <div className="flex-grow overflow-y-auto flex flex-col gap-6 px-[30px] pt-6 pb-6 scrollable-content-area"> {/* Added scrollable-content-area class */}
+                    <div className="flex-grow overflow-y-auto flex flex-col gap-6 px-[20px] lg:px-[30px] pt-6 pb-6 scrollable-content-area">
                         {userHasGeminiKey === false && !apiKeyStatusLoading && (
                             <div className="text-center mb-4 p-[10px] text-[#c0392b] bg-[#fadbd8] border border-[#f1948a] rounded-md">
                                 Gemini API Key is not set. Chat functionality is disabled.
                                 <button onClick={() => setShowApiKeyModal(true)} className="ml-2 px-2 py-1 text-xs bg-white border border-gray-300 rounded cursor-pointer hover:bg-gray-100">Set Key</button>
                             </div>
                         )}
-                        {/* Top Controls Row */}
                         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6 lg:gap-[30px] pb-6 mb-6 border-b border-[#e7eaf3]">
-                            {/* Left Controls */}
-                            <div className="flex flex-col gap-6 lg:basis-1/2">
+                            <div className="flex flex-col gap-6 lg:basis-1/2 w-full">
                                 <div className={controlPanelBaseClasses}>
                                     <RepomixForm
-                                        repoUrl={repoUrl}
-                                        onRepoUrlChange={onRepoUrlChange}
-                                        onGenerate={handleGenerateRepomixFile}
-                                        isGenerating={isGenerating}
-                                        generationMessage={generationMessage}
-                                        generationError={generationError}
+                                        onGenerate={generateRepomixFile}
+                                        isGenerating={repomixIsLoading && !parsedRepomixData && !selectedRepoFile} // More specific: loading AND no file is yet fully processed/selected
                                     />
                                  </div>
                                 <div className={controlPanelBaseClasses}>
                                     <RepoSelector
                                         repos={availableRepos}
                                         onSelectRepo={loadRepoFileContent}
-                                        isLoading={isLoadingRepos || isLoadingFileContent}
-                                        selectedValue={selectedRepoFile}
+                                        isLoading={repomixIsLoading && (!selectedRepoFile || selectedRepoFile !== availableRepos.find(r=>r.filename === selectedRepoFile)?.filename)}
+                                        selectedValue={selectedRepoFile || ""}
+                                        onDeleteRepo={deleteRepomixFile} // Pass the delete function
+                                        isDeleting={repomixIsLoading && !!selectedRepoFile} // Indicate deleting if loading and a file is selected
                                     />
                                  </div>
                                 <div className={`${controlPanelBaseClasses}`}>
@@ -416,7 +439,7 @@ function App() {
                                                 {isSystemPromptSaving ? 'Saving...' : 'Save to DB'}
                                             </button>
                                             {systemPromptMessage && (
-                                                <p className={`${statusMessageBaseClasses} ${systemPromptMessage.includes('Error') ? statusMessageErrorClasses : statusMessageSuccessClasses}`}>
+                                                <p className={`${statusMessageBaseClasses} ${systemPromptMessage.includes('Error') || systemPromptMessage.includes('Failed') ? statusMessageErrorClasses : statusMessageSuccessClasses}`}>
                                                     {systemPromptMessage}
                                                 </p>
                                             )}
@@ -424,8 +447,7 @@ function App() {
                                     )}
                                 </div>
                             </div>
-                            {/* Right Controls */}
-                            <div className="flex flex-col gap-6 lg:basis-1/2">
+                            <div className="flex flex-col gap-6 lg:basis-1/2 w-full">
                                 <div className={controlPanelBaseClasses}>
                                     <ModelSettings
                                         availableModels={availableModels}
@@ -438,19 +460,16 @@ function App() {
                                     />
                                  </div>
                             </div>
-                        </div> {/* End Top Controls Row */}
+                        </div>
 
-                        {/* Attachment Status */}
                         {attachmentStatus && (
-                             <div className={`${statusMessageBaseClasses} ${attachmentStatus.includes('Failed') || attachmentStatus.includes('non-standard') ? statusMessageWarningClasses : statusMessageSuccessClasses}`}>
+                             <div className={`${statusMessageBaseClasses} ${attachmentStatus.includes('Failed') || attachmentStatus.includes('non-standard') || attachmentStatus.includes('Error') ? statusMessageWarningClasses : statusMessageSuccessClasses}`}>
                                 {attachmentStatus}
                             </div>
                         )}
 
-                        {/* Global Error */}
-                        {globalError && <div className={`px-[18px] py-3 mt-[10px] mb-[10px] rounded-md text-center flex-shrink-0 text-[#c0392b] bg-[#fadbd8] border border-[#f1948a]`}>{globalError}</div>}
+                        {globalError && <div className={`px-[18px] py-3 mt-[10px] mb-[10px] rounded-md text-center flex-shrink-0 ${statusMessageErrorClasses}`}>{globalError}</div>}
 
-                        {/* Chat Interface */}
                         <ChatInterface
                             history={chatHistory}
                             onStartComparison={handleStartComparison}
@@ -459,10 +478,9 @@ function App() {
                         {chatIsLoading && chatHistory.length > 0 && chatHistory[chatHistory.length - 1].role === 'user' && (
                             <div className="px-[18px] py-3 mt-[10px] mb-[10px] rounded-md text-center flex-shrink-0 text-[#566573] italic">Thinking...</div>
                         )}
-                    </div> {/* End Scrollable Area */}
+                    </div>
 
-                    {/* Input Area Container */}
-                    <div className="flex-shrink-0 bg-[#f8f9fc] px-[25px] py-3 border-t border-[#e7eaf3] shadow-[0_-2px_5px_rgba(0,0,0,0.03)] z-10">
+                    <div className="flex-shrink-0 bg-[#f8f9fc] px-[15px] sm:px-[25px] py-3 border-t border-[#e7eaf3] shadow-[0_-2px_5px_rgba(0,0,0,0.03)] z-10">
                         <InputArea
                             onPromptSubmit={handlePromptSubmit}
                             onFileAttach={handleManualFileAttach}
@@ -470,25 +488,24 @@ function App() {
                             attachedFileName={displayAttachedFileNameForInputArea}
                         />
                     </div>
-                </div> {/* End Center Column */}
+                </div>
 
-                {/* File Content Display (Conditional on Fullscreen) */}
                 {(parsedRepomixData || comparisonView) && isFullScreenView && (
                      <div className={
                         comparisonView
-                            ? comparisonPanelForComparisonViewClasses // FS + Comparison: Comparison Panel takes 2/3
-                            : fileContentPanelFullscreenClasses     // FS + No Comparison (3-panel): File Viewer is flex-1
+                            ? comparisonPanelForComparisonViewClasses
+                            : fileContentPanelFullscreenClasses
                      }>
                         <FileContentDisplay
                             filePath={selectedFilePathForView}
                             content={selectedFileContentForView}
-                            isLoading={isLoadingSelectedFileForView && !comparisonView}
+                            isLoading={repomixIsLoading && !!selectedFilePathForView && !selectedFileContentForView && !comparisonView}
                             comparisonData={comparisonView}
                             onCloseComparison={handleCloseComparison}
                         />
                      </div>
                 )}
-            </div> {/* End Main Content Wrapper */}
+            </div>
 
             <footer className="flex items-center justify-end px-[30px] py-[10px] h-[45px] border-t border-[#e7eaf3] bg-[#f8f9fc] text-xs text-[#7f8c9a] flex-shrink-0">
                 Powered by Gemini & Repomix
