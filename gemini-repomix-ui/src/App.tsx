@@ -1,5 +1,5 @@
 // src/App.tsx (Refactored)
-import { useMemo, useState, useEffect } from 'react'; // Added useCallback
+import { useMemo, useState, useEffect } from 'react';
 import AuthForm from './components/AuthForm';
 import ApiKeyModal from './components/ApiKeyModal';
 import FileTree from './components/FileTree';
@@ -10,8 +10,8 @@ import MainWorkspaceLayout from './layout/MainWorkspaceLayout';
 import CentralInteractionPanel from './containers/CentralInteractionPanel';
 
 import { useAuth } from './contexts/AuthContext';
-import { useRepoFileManager } from './contexts/RepoFileManagerContext'; // New
-import { useActiveRepomixData } from './contexts/ActiveRepomixDataContext'; // New
+import { useRepoFileManager } from './contexts/RepoFileManagerContext';
+import { useActiveRepomixData } from './contexts/ActiveRepomixDataContext';
 
 import { useModels } from './hooks/useModels';
 import { useSystemPrompt } from './hooks/useSystemPrompt';
@@ -38,6 +38,7 @@ function App() {
         generationStatus,
         deleteRepoFile,
         selectedRepoFilename,
+        fileContentVersion, // Get the version key
         selectRepoFileForProcessing,
         repoUrlForForm,
         setRepoUrlForForm,
@@ -68,38 +69,41 @@ function App() {
     } = useActiveRepomixData();
 
     const { updateGeminiConfig, selectedModelCallName, recordCallStats, resetCurrentCallStats, isLoadingModels, modelError } = useModels();
-    const { isLoadingPrompt, isSystemPromptSaving } = useSystemPrompt(); // SystemPrompt hooks are self-contained for ConfigurationPanel
+    const { isLoadingPrompt, isSystemPromptSaving } = useSystemPrompt();
 
     const apiKey = useApiKeyStatus({ updateGeminiConfig });
-    const [globalAppError, setGlobalAppError] = useState<string | null>(null); // For AppView related errors
+    const [globalAppError, setGlobalAppError] = useState<string | null>(null);
 
-    // Effect to load data when a server file is selected by RepoFileManager
+    // Effect to load data when a server file is selected OR its underlying content version changes
     useEffect(() => {
+        // console.log('[App.tsx EFFECT] Triggered. selectedRepoFilename:', selectedRepoFilename, 'fileContentVersion:', fileContentVersion);
         if (selectedRepoFilename) {
+            // console.log('[App.tsx EFFECT] Calling loadAndParseDataFromServerFile for:', selectedRepoFilename);
             loadAndParseDataFromServerFile(selectedRepoFilename);
         } else {
-            clearActiveData(); // Clear data if no file is selected
+            // console.log('[App.tsx EFFECT] Clearing active data.');
+            clearActiveData();
         }
-    }, [selectedRepoFilename, loadAndParseDataFromServerFile, clearActiveData]);
+    }, [selectedRepoFilename, fileContentVersion, loadAndParseDataFromServerFile, clearActiveData]); // <--- ADDED fileContentVersion HERE
 
     const chat = useChatHandler({
         userHasGeminiKey: apiKey.userHasGeminiKey,
         apiKeyStatusLoading: apiKey.apiKeyStatusLoading,
         openApiKeyModal: apiKey.openApiKeyModal,
-        parsedRepomixData, // From ActiveRepomixDataContext
-        selectedRepoFile: activeRepomixSource?.filename || null, // From ActiveRepomixDataContext
-        promptSelectedFilePaths, // From ActiveRepomixDataContext
+        parsedRepomixData,
+        selectedRepoFile: activeRepomixSource?.filename || null,
+        promptSelectedFilePaths,
         selectedModelCallName,
         recordCallStats,
         resetCurrentCallStats,
     });
 
     const view = useAppView({
-        parsedRepomixData, // From ActiveRepomixDataContext
+        parsedRepomixData,
         setGlobalError: (err) => {
             if (err) {
                 setGlobalAppError(err);
-                chat.clearChatError(); // Clear chat specific error if a global one is set
+                chat.clearChatError();
             } else {
                 setGlobalAppError(null);
             }
@@ -109,10 +113,9 @@ function App() {
     const handleSignOut = async () => {
         await signOut();
         clearActiveData();
-        selectRepoFileForProcessing(null); // Clear selected file in manager
+        selectRepoFileForProcessing(null);
     };
 
-    // Combine attachment/generation statuses for display
     const displayStatusMessage = useMemo(() => {
         if (generationStatus.error) return generationStatus.error;
         if (generationStatus.message) return generationStatus.message;
@@ -120,7 +123,6 @@ function App() {
         return null;
     }, [generationStatus, activeDataAttachmentStatus]);
 
-    // Clear status messages after a delay or on new action
     useEffect(() => {
         const timer = setTimeout(() => {
             if (generationStatus.message || generationStatus.error) {
@@ -129,20 +131,18 @@ function App() {
             if (activeDataAttachmentStatus) {
                 clearActiveDataAttachmentStatus();
             }
-        }, 7000); // Longer timeout for combined statuses
+        }, 7000);
         return () => clearTimeout(timer);
     }, [displayStatusMessage, clearGenerationStatus, clearActiveDataAttachmentStatus]);
 
-
     const displayAttachedFileNameForInputArea = useMemo(() => {
-        if (promptSelectedFilePaths.length > 0 && parsedRepomixData) { // Ensure parsedRepomixData exists for this message
+        if (promptSelectedFilePaths.length > 0 && parsedRepomixData) {
             const allFilesCount = allFilePathsInCurrentRepomix.length;
             if (allFilesCount > 0 && promptSelectedFilePaths.length === allFilesCount) {
                  return `All ${allFilesCount} file(s) selected for prompt`;
             }
             return `${promptSelectedFilePaths.length} file(s) selected for prompt`;
         }
-        // Use activeRepomixSource for the general "attached file" name
         if (activeRepomixSource?.filename) {
             const typePrefix = activeRepomixSource.type === 'manual' ? "Manually Attached: " : "Active: ";
             return typePrefix + activeRepomixSource.filename;
@@ -154,7 +154,6 @@ function App() {
                        isLoadingModels || isLoadingPrompt || isSystemPromptSaving || apiKey.apiKeyStatusLoading || isDeleting;
 
     const currentError = globalAppError || modelError || repoFilesError || activeDataError || chat.chatError || apiKey.apiKeyError || generationStatus.error;
-
 
     if (authIsLoading || (session && apiKey.apiKeyStatusLoading && apiKey.userHasGeminiKey === null)) {
         return <div className="flex justify-center items-center h-screen text-center text-lg">Loading application essentials...</div>;
@@ -175,7 +174,6 @@ function App() {
         isToggleFullScreenDisabled: anyLoading && view.isFullScreenView,
     };
 
-    // FileTree now consumes ActiveRepomixDataContext for its data
     const fileTreeComponent = (parsedRepomixData && view.isFullScreenView && !view.comparisonView) ? (
         <FileTree
             structure={parsedRepomixData.directoryStructure}
@@ -188,7 +186,6 @@ function App() {
         />
     ) : null;
 
-    // FileContentDisplay now consumes ActiveRepomixDataContext for its data
     const fileDisplayComponent = ((parsedRepomixData || view.comparisonView) && view.isFullScreenView) ? (
         <FileContentDisplay
             filePath={selectedFilePathForView}
@@ -209,34 +206,23 @@ function App() {
             : 'flex-grow border-r border-[#e7eaf3]'
         }`;
 
-    // Props for ConfigurationPanel - this component would need to be refactored
-    // to accept these or consume contexts directly.
     const configurationPanelProps = {
-        // From RepoFileManagerContext
         availableRepos: availableRepoFiles,
-        onSelectRepo: selectRepoFileForProcessing, // This changes role
+        onSelectRepo: selectRepoFileForProcessing,
         isLoadingRepos: isLoadingRepoFiles,
         selectedRepoFilename: selectedRepoFilename,
         onDeleteRepo: deleteRepoFile,
         isDeleting: isDeleting,
         repoUrlForForm: repoUrlForForm,
         onRepoUrlChange: setRepoUrlForForm,
-        onGenerateRepomix: async (url: string, inc: string, exc: string) => { // Wrapper for generateRepomixOutput
+        onGenerateRepomix: async (url: string, inc: string, exc: string) => {
             const newFilename = await generateRepomixOutput(url, inc, exc);
             if (newFilename) {
-                selectRepoFileForProcessing(newFilename); // Auto-select new file
+                selectRepoFileForProcessing(newFilename);
             }
         },
         isGeneratingRepomix: isGenerating,
-        // From useSystemPrompt (passed through)
-        // systemPrompt, setSystemPrompt, showSystemPromptInput, setShowSystemPromptInput,
-        // isLoadingSystemPrompt: isLoadingPrompt, isSavingSystemPrompt: isSystemPromptSaving,
-        // systemPromptMessage, handleSaveSystemPrompt,
-        // From useModels (passed through)
-        // availableModels, selectedModelCallName, onModelChange, isLoadingModels,
-        // currentCallStats, totalSessionStats,
     };
-
 
     return (
         <AppLayout
@@ -254,14 +240,13 @@ function App() {
                 fileTreeComponent={fileTreeComponent}
                 centralPanelComponent={
                     <CentralInteractionPanel
-                        apiKeyStatus={{ // This remains the same
+                        apiKeyStatus={{
                             userHasGeminiKey: apiKey.userHasGeminiKey,
                             apiKeyStatusLoading: apiKey.apiKeyStatusLoading,
                             openApiKeyModal: apiKey.openApiKeyModal,
                         }}
                         isChatLoading={chat.chatIsLoading}
-                        // Updated props sourcing from new contexts
-                        attachmentStatus={displayStatusMessage} // Combined status
+                        attachmentStatus={displayStatusMessage}
                         currentError={currentError}
                         chatHistory={chat.chatHistory}
                         onStartComparison={view.startComparison}
@@ -271,15 +256,7 @@ function App() {
                         anyLoading={anyLoading}
                         displayAttachedFileNameForInputArea={displayAttachedFileNameForInputArea}
                         centerColumnClasses={centerColumnClassesForCentralPanel}
-                        // Pass down configurationPanelProps to CentralInteractionPanel
-                        // if ConfigurationPanel is a child of it and not directly consuming contexts.
-                        // This example assumes CentralInteractionPanel might render ConfigurationPanel
-                        // or ConfigurationPanel is refactored to consume contexts.
-                        // For simplicity, I'll show passing necessary specific props to ConfigPanel via CentralPanel.
-                        // This might mean CentralInteractionPanel needs to accept these and pass them on.
-                        // OR, ConfigurationPanel is moved outside CentralInteractionPanel and consumes contexts directly.
-                        // Let's assume CentralInteractionPanel is updated to take these:
-                        configPanelRepoFileProps={configurationPanelProps} // Pass this down
+                        configPanelRepoFileProps={configurationPanelProps}
                     />
                 }
                 fileDisplayComponent={fileDisplayComponent}
@@ -290,11 +267,3 @@ function App() {
 }
 
 export default App;
-
-// NOTE for CentralInteractionPanel.tsx:
-// You'll need to update CentralInteractionPanel to accept `configPanelRepoFileProps`
-// and pass them to `<ConfigurationPanel {...props.configPanelRepoFileProps} ... />`.
-// Alternatively, and perhaps cleaner, ConfigurationPanel itself could be refactored
-// to directly use `useRepoFileManager()`, `useSystemPrompt()`, and `useModels()`.
-// This would remove the need to pass so many props through CentralInteractionPanel.
-// The example above sets up `configurationPanelProps` as if `CentralInteractionPanel` will forward them.

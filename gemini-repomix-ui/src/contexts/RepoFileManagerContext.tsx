@@ -1,7 +1,7 @@
 // gemini-repomix-ui/src/contexts/RepoFileManagerContext.tsx
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import * as api from '../services/api';
-import type { RepoInfo } from '../components/RepoSelector'; // Assuming this path is correct
+import type { RepoInfo } from '../components/RepoSelector';
 import { useAuth } from './AuthContext';
 import { parseRepoInfoFromFilename } from '../utils/filenameUtils';
 
@@ -11,9 +11,10 @@ interface RepoFileManagerState {
     repoFilesError: string | null;
     isGenerating: boolean;
     generationStatus: { message: string | null; error: string | null };
-    isDeleting: boolean; // Added for delete operation
+    isDeleting: boolean;
     selectedRepoFilename: string | null;
     repoUrlForForm: string;
+    fileContentVersion: number; // <--- NEW STATE
 }
 
 interface RepoFileManagerActions {
@@ -39,6 +40,7 @@ export const RepoFileManagerProvider: React.FC<{ children: ReactNode }> = ({ chi
         isDeleting: false,
         selectedRepoFilename: null,
         repoUrlForForm: '',
+        fileContentVersion: 0, // <--- INITIALIZE NEW STATE
     });
     const generationStatusTimer = useRef<number | null>(null);
 
@@ -80,20 +82,16 @@ export const RepoFileManagerProvider: React.FC<{ children: ReactNode }> = ({ chi
 
         const result = await api.runRepomix({ repoUrl, includePatterns: include, excludePatterns: exclude });
         
-        // Check if result.success is true and result.data and result.data.newFile are present
-        if (result.success && result.data && result.data.newFile) {
-            // Assign result.data to a new const to help TypeScript with type narrowing.
+        if (result.success && result.data?.newFile) {
             const confirmedData = result.data; 
-            
-            setState(prev => ({
+            await fetchAvailableRepoFiles(); // Refresh list first
+            setState(prev => ({ // Then update version and other status
                 ...prev,
                 isGenerating: false,
-                // Use the new 'confirmedData' const which should have the narrowed type.
                 generationStatus: { message: confirmedData.message || `Generated ${confirmedData.newFile.filename}`, error: null },
+                fileContentVersion: prev.fileContentVersion + 1, // <--- INCREMENT VERSION
             }));
-            await fetchAvailableRepoFiles(); // Refresh list
             generationStatusTimer.current = window.setTimeout(clearGenerationStatus, 5000);
-            // Use confirmedData here as well.
             return confirmedData.newFile.filename;
         } else {
             setState(prev => ({
@@ -104,53 +102,60 @@ export const RepoFileManagerProvider: React.FC<{ children: ReactNode }> = ({ chi
             generationStatusTimer.current = window.setTimeout(clearGenerationStatus, 5000);
             return null;
         }
-    }, [session, fetchAvailableRepoFiles, clearGenerationStatus]);
+    }, [session, fetchAvailableRepoFiles, clearGenerationStatus]); // setState implicitly covered by being part of the component
 
     const deleteRepoFile = useCallback(async (filename: string): Promise<boolean> => {
-        if (!session) {
-             // Handle auth error if needed, or rely on API layer
-            return false;
-        }
+        // ... (no changes needed here for this specific bug, but ensure it works)
+        if (!session) { return false; }
         setState(prev => ({ ...prev, isDeleting: true }));
         const result = await api.deleteGeneratedFile(filename);
         if (result.success) {
             await fetchAvailableRepoFiles();
             if (state.selectedRepoFilename === filename) {
-                setState(prev => ({ ...prev, selectedRepoFilename: null, repoUrlForForm: '' }));
+                setState(prev => ({ 
+                    ...prev, 
+                    selectedRepoFilename: null, 
+                    repoUrlForForm: '',
+                    fileContentVersion: prev.fileContentVersion + 1 // Increment on delete too, as selected file changes
+                }));
             }
         } else {
             console.error("Failed to delete file:", result.error);
-            // Optionally set an error message in state for the UI
             setState(prev => ({ ...prev, repoFilesError: `Failed to delete ${filename}: ${result.error}`}));
         }
         setState(prev => ({ ...prev, isDeleting: false }));
         return result.success;
-    }, [session, fetchAvailableRepoFiles, state.selectedRepoFilename]);
+    }, [session, fetchAvailableRepoFiles, state.selectedRepoFilename]); // Added state.selectedRepoFilename
 
     const selectRepoFileForProcessing = useCallback((filename: string | null) => {
-        setState(prev => ({ ...prev, selectedRepoFilename: filename, repoFilesError: null })); // Clear errors on new selection
+        // When a new file is selected from the dropdown, this is a distinct event.
+        // The App.tsx useEffect will pick up the change in selectedRepoFilename.
+        // If the selection itself should imply a "new version" of content to load,
+        // you could also increment fileContentVersion here, but typically not needed
+        // if selectedRepoFilename is changing to a new string identity.
+        // The problem arises when selectedRepoFilename is set to the *same* string again.
+        setState(prev => ({ 
+            ...prev, 
+            selectedRepoFilename: filename, 
+            repoFilesError: null,
+            // Optionally increment version if selecting the same file means "reload it"
+            // fileContentVersion: prev.selectedRepoFilename === filename ? prev.fileContentVersion + 1 : prev.fileContentVersion 
+        }));
         if (filename) {
             const repoDetails = parseRepoInfoFromFilename(filename);
             const currentRepo = state.availableRepoFiles.find(r => r.filename === filename);
-            if (currentRepo && repoDetails) {
-                // Ensure the repoIdentifier from the list is prioritized if available for URL construction
-                // Assuming repoIdentifier is "owner/repo"
-                const [owner, repoName] = currentRepo.repoIdentifier.split('/');
-                if (owner && repoName) {
-                    setState(prev => ({ ...prev, repoUrlForForm: `https://github.com/${owner}/${repoName}.git` }));
-                } else {
-                     setState(prev => ({ ...prev, repoUrlForForm: `https://github.com/${repoDetails.owner}/${repoDetails.repoName}.git` }));
-                }
-            } else if (repoDetails) { // Fallback to parsing from filename if not in available list (shouldn't happen ideally)
+            if (currentRepo?.repoIdentifier) {
+                 const [owner, repoName] = currentRepo.repoIdentifier.split('/');
+                 if (owner && repoName) setState(prev => ({ ...prev, repoUrlForForm: `https://github.com/${owner}/${repoName}.git` }));
+            } else if (repoDetails) {
                  setState(prev => ({ ...prev, repoUrlForForm: `https://github.com/${repoDetails.owner}/${repoDetails.repoName}.git` }));
-            }
-             else {
+            } else {
                  setState(prev => ({ ...prev, repoUrlForForm: '' }));
             }
         } else {
             setState(prev => ({ ...prev, repoUrlForForm: '' }));
         }
-    }, [state.availableRepoFiles]); // Added availableRepoFiles dependency
+    }, [state.availableRepoFiles]);
 
     return (
         <RepoFileManagerContext.Provider value={{ ...state, fetchAvailableRepoFiles, generateRepomixOutput, deleteRepoFile, selectRepoFileForProcessing, setRepoUrlForForm, clearGenerationStatus }}>
@@ -159,7 +164,7 @@ export const RepoFileManagerProvider: React.FC<{ children: ReactNode }> = ({ chi
     );
 };
 
-export const useRepoFileManager = () => {
+export const useRepoFileManager = () => { // Ensure this is exported if not already
     const context = useContext(RepoFileManagerContext);
     if (!context) throw new Error('useRepoFileManager must be used within a RepoFileManagerProvider');
     return context;
