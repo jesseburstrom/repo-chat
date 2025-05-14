@@ -90,7 +90,11 @@ export function parseRepomixFile(content: string): ParsedRepomixData | null {
         // 2. Parse File Contents
         const filesContent = filesMatch[1];
         const fileContents: Record<string, string> = {};
-        const fileRegex = /<file path="([^"]+)">([\s\S]*?)<\/file>/g;
+
+         // MODIFIED Regex:
+        // Uses a non-greedy content match, but the </file> must be followed by
+        // whitespace and then either <file path=, </files>, or end-of-string.
+        const fileRegex = /<file path="([^"]+)">([\s\S]*?)<\/file>(?=\s*(?:<file path=|<\/files>|$))/g;
         let fileBlockMatch;
 
         while ((fileBlockMatch = fileRegex.exec(filesContent)) !== null) {
