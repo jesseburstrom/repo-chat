@@ -1,6 +1,6 @@
-// gemini-repomix-ui/src/AuthForm.tsx
+// gemini-repomix-ui/src/components/AuthForm.tsx
 import React, { useState } from 'react';
-import { useAuth } from './contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 // Removed: import './AuthForm.css'; // Migrated to Tailwind
 
 const AuthForm: React.FC = () => {

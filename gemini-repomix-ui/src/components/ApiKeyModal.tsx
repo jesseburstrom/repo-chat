@@ -1,6 +1,6 @@
-// gemini-repomix-ui/src/ApiKeyModal.tsx
+// gemini-repomix-ui/src/components/ApiKeyModal.tsx
 import React, { useState } from 'react';
-import * as api from './services/api';
+import * as api from '../services/api';
 // Removed: import './ApiKeyModal.css'; // Migrated to Tailwind
 
 interface ApiKeyModalProps {

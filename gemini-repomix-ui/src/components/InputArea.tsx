@@ -1,4 +1,4 @@
-// src/InputArea.tsx
+// src/components/InputArea.tsx
 import React, { useState, useRef, useEffect, useCallback, ChangeEvent, KeyboardEvent, FormEvent } from 'react';
 // Removed: import './InputArea.css'; // Migrated to Tailwind
 

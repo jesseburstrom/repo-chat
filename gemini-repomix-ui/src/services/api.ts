@@ -1,9 +1,9 @@
 // src/services/api.ts
 
 import type { ChatMessage } from '../types';
-import type { ClientGeminiModelInfo } from '../ModelSettings'; // Adjust path if needed
-import type { RepoInfo } from '../RepoSelector'; // Adjust path if needed
-import { supabase } from '../supabaseClient'; // Import supabase client
+import type { ClientGeminiModelInfo } from '../components/ModelSettings'; // Adjust path if needed
+import type { RepoInfo } from '../components/RepoSelector'; // Adjust path if needed
+import { supabase } from './supabaseClient'; // Import supabase client
 
 const API_PREFIX = import.meta.env.DEV ? '' : '/repochat'; // Your existing prefix logic
 

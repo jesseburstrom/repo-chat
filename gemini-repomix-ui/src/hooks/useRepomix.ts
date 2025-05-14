@@ -6,7 +6,7 @@ import {
     runRepomix as apiRunRepomix,
 } from '../services/api';
 import { parseRepomixFile, ParsedRepomixData } from '../utils/parseRepomix';
-import type { RepoInfo } from '../RepoSelector';
+import type { RepoInfo } from '../components/RepoSelector';
 import { useAuth } from '../contexts/AuthContext'; // Import useAuth
 
 const getAllFilePathsFromParsedData = (data: ParsedRepomixData | null): string[] => {

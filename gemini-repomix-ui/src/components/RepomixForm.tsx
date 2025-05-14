@@ -1,4 +1,4 @@
-// gemini-repomix-ui/src/RepomixForm.tsx
+// gemini-repomix-ui/src/components/RepomixForm.tsx
 import React, { useState } from 'react';
 
 interface RepomixFormProps {

@@ -1,7 +1,7 @@
 // src/hooks/useModels.ts
 import { useState, useEffect, useCallback } from 'react';
 import { fetchGeminiConfig as apiFetchGeminiConfig } from '../services/api';
-import type { ClientGeminiModelInfo, TokenStats } from '../ModelSettings';
+import type { ClientGeminiModelInfo, TokenStats } from '../components/ModelSettings';
 import { useAuth } from '../contexts/AuthContext';
 // It's better practice to import the default from a shared location if possible,
 // but importing from backend might be complex. Define it here or in a shared constants file.

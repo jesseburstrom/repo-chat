@@ -1,4 +1,4 @@
-// gemini-repomix-ui/src/ModelSettings.tsx
+// gemini-repomix-ui/src/components/ModelSettings.tsx
 import React from 'react';
 // Removed: import './ModelSettings.css'; // Migrated to Tailwind
 

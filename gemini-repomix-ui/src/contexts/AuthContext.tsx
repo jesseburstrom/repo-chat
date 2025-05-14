@@ -1,7 +1,7 @@
 // gemini-repomix-ui/src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Session, User, AuthChangeEvent, AuthError, Subscription } from '@supabase/supabase-js';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../services/supabaseClient';
 
 interface AuthContextType {
     session: Session | null;

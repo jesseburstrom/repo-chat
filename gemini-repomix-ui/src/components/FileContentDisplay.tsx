@@ -1,4 +1,4 @@
-// FilePath: gemini-repomix-ui/src/FileContentDisplay.tsx
+// FilePath: gemini-repomix-ui/src/components/FileContentDisplay.tsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { getHighlighter, bundledLanguages } from 'shikiji';
 import type { Highlighter } from 'shikiji';

@@ -1,4 +1,4 @@
-// src/RepoSelector.tsx
+// src/components/RepoSelector.tsx
 import React from 'react';
 
 export interface RepoInfo {

@@ -1,7 +1,7 @@
-// gemini-repomix-ui/src/AppHeader.tsx
+// gemini-repomix-ui/src/components/AppHeader.tsx
 import React from 'react';
 
-interface AppHeaderProps {
+export interface AppHeaderProps {
     userHasGeminiKey: boolean | null;
     apiKeyStatusLoading: boolean;
     onOpenApiKeyModal: () => void;

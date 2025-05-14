@@ -1,12 +1,12 @@
-// gemini-repomix-ui/src/ConfigurationPanel.tsx
+// gemini-repomix-ui/src/components/ConfigurationPanel.tsx
 import React from 'react';
 import RepomixForm from './RepomixForm';
 import RepoSelector from './RepoSelector';
 import ModelSettings from './ModelSettings';
-import { useRepomixContext } from './contexts/RepomixContext';
-import { useSystemPrompt } from './hooks/useSystemPrompt';
-import { useModels } from './hooks/useModels';
-import { UseApiKeyStatusReturn } from './hooks/useApiKeyStatus'; // Import the return type
+import { useRepomixContext } from '../contexts/RepomixContext';
+import { useSystemPrompt } from '../hooks/useSystemPrompt';
+import { useModels } from '../hooks/useModels';
+import { UseApiKeyStatusReturn } from '../hooks/useApiKeyStatus'; // Import the return type
 
 interface ConfigurationPanelProps {
     apiKeyStatus: Pick<UseApiKeyStatusReturn, 'userHasGeminiKey' | 'apiKeyStatusLoading' | 'openApiKeyModal'>;

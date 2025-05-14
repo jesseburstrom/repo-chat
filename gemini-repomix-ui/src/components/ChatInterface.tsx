@@ -1,12 +1,12 @@
-// FilePath: gemini-repomix-ui/src/ChatInterface.tsx
+// FilePath: gemini-repomix-ui/src/components/ChatInterface.tsx
 import React, { useState, useEffect, useRef, JSX } from 'react'; // Ensure React is imported for React.Children
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getHighlighter, bundledLanguages } from 'shikiji';
 import type { Highlighter } from 'shikiji';
 
-import type { ChatMessage } from './types';
-import { ParsedRepomixData } from './utils/parseRepomix';
+import type { ChatMessage } from '../types';
+import { ParsedRepomixData } from '../utils/parseRepomix';
 
 const useShikijiHighlighter = () => {
   const [highlighter, setHighlighter] = useState<Highlighter | null>(null);

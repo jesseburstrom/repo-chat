@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import * as api from '../services/api';
 import { parseRepomixFile, ParsedRepomixData } from '../utils/parseRepomix';
-import type { RepoInfo } from '../RepoSelector';
+import type { RepoInfo } from '../components/RepoSelector';
 import { useAuth } from './AuthContext';
 import { parseRepoInfoFromFilename } from '../utils/filenameUtils'; // ++ Import the new utility
 

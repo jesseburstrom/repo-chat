@@ -1,4 +1,4 @@
-// src/FileTree.tsx
+// src/components/FileTree.tsx
 import React, { useMemo } from 'react';
 // Removed: import './FileTree.css'; // We are migrating away from this
 
