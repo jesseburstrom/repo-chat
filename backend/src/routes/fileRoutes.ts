@@ -14,16 +14,15 @@ import {
 import {
     listUserGeneratedFiles,
     deleteUserGeneratedFile,
-    USER_GENERATED_FILES_TABLE, // For direct DB checks if necessary
-    ListedRepoInfo // Type for listing
+    USER_GENERATED_FILES_TABLE, 
+    ListedRepoInfo 
 } from '../services/repomixService';
 
 const router = express.Router();
 
-// --- Response Interfaces ---
-interface ListGeneratedFilesClientResponse { // Renamed to avoid conflict if api.ts uses same name
+interface ListGeneratedFilesClientResponse {
     success: boolean;
-    data?: ListedRepoInfo[]; // Uses the type from repomixService
+    data?: ListedRepoInfo[];
     error?: string;
 }
 
@@ -39,7 +38,6 @@ interface DeleteFileClientResponse {
     error?: string;
 }
 
-// --- Route: List Generated Files for User ---
 router.get('/list-generated-files', async (req: AuthenticatedRequest, res: Response<ListGeneratedFilesClientResponse>, next: NextFunction) => {
     const userId = req.user?.id;
 
@@ -47,7 +45,7 @@ router.get('/list-generated-files', async (req: AuthenticatedRequest, res: Respo
         res.status(403).json({ success: false, error: 'User not authenticated or server misconfigured.' });
         return;
     }
-    console.log(`Request received for /list-generated-files for user ${userId}`);
+    // console.log(`Request received for /list-generated-files for user ${userId}`); // Optional: keep for debugging
 
     try {
         const result = await listUserGeneratedFiles(userId, supabaseAdminClient);
@@ -55,17 +53,17 @@ router.get('/list-generated-files', async (req: AuthenticatedRequest, res: Respo
             res.status(200).json({ success: true, data: result.data || [] });
         } else {
             console.error(`Error from listUserGeneratedFiles service for user ${userId}:`, result.error);
-            throw new Error(result.error || 'Failed to list files from database.');
+            // Pass a generic error or the specific one if safe
+            next(new Error('Failed to list files from database.'));
         }
     } catch (error: any) {
         console.error(`Error in /list-generated-files endpoint for user ${userId}:`, error);
         if (!res.headersSent) {
-             next(error);
+             next(error); // Pass to global error handler
         }
     }
 });
 
-// --- Route: Get Content of a Specific File ---
 router.get('/get-file-content/:filename', async (req: AuthenticatedRequest, res: Response<GetFileContentClientResponse>, next: NextFunction): Promise<void> => {
     const requestedFilename = req.params.filename;
     const userId = req.user?.id;
@@ -74,7 +72,7 @@ router.get('/get-file-content/:filename', async (req: AuthenticatedRequest, res:
         res.status(403).json({ success: false, error: 'User not authenticated or server misconfigured.' });
         return;
     }
-    console.log(`Request received for /get-file-content/${requestedFilename} for user ${userId}`);
+    // console.log(`Request received for /get-file-content/${requestedFilename} for user ${userId}`); // Optional
 
     const safeFilenameRegex = /^[a-zA-Z0-9_.-]+(\.md|_pack_summary\.txt)$/;
     if (!requestedFilename || !safeFilenameRegex.test(requestedFilename) || requestedFilename.includes('/') || requestedFilename.includes('..')) {
@@ -92,7 +90,6 @@ router.get('/get-file-content/:filename', async (req: AuthenticatedRequest, res:
     }
 
     try {
-        // Security: Verify the user owns this file record in the DB.
         const { data: fileRecord, error: dbError } = await supabaseAdminClient
             .from(USER_GENERATED_FILES_TABLE)
             .select('id')
@@ -102,13 +99,11 @@ router.get('/get-file-content/:filename', async (req: AuthenticatedRequest, res:
 
         if (dbError) {
             console.error(`Database error checking file auth for ${requestedFilename} (user ${userId}):`, dbError);
-            throw new Error('Database error during file authorization.');
+            return next(new Error('Database error during file authorization.')); // Use next for error handling
         }
 
         let allowAccess = !!fileRecord;
 
-        // Special handling for summary files if they are not directly in user_generated_files
-        // This logic assumes summary files are named based on main files.
         if (!allowAccess && requestedFilename.endsWith(`${SUMMARY_FILENAME_SUFFIX}${SUMMARY_FILENAME_EXTENSION}`)) {
             const mainFileName = requestedFilename.replace(`${SUMMARY_FILENAME_SUFFIX}${SUMMARY_FILENAME_EXTENSION}`, MAIN_FILENAME_EXTENSION);
             const { data: mainFileRecord, error: mainDbError } = await supabaseAdminClient
@@ -120,10 +115,9 @@ router.get('/get-file-content/:filename', async (req: AuthenticatedRequest, res:
 
             if (mainDbError) {
                 console.error(`Database error checking summary's main file auth for ${requestedFilename} (user ${userId}):`, mainDbError);
-                // Don't throw here, just means we can't confirm via main file
             }
             if (mainFileRecord) {
-                allowAccess = true; // Allow access to summary if user owns the main file
+                allowAccess = true;
             }
         }
 
@@ -135,6 +129,13 @@ router.get('/get-file-content/:filename', async (req: AuthenticatedRequest, res:
 
         await fs.promises.access(normalizedPath, fsConstants.R_OK);
         const content = await fs.promises.readFile(normalizedPath, 'utf-8');
+
+        // ---> ADD CACHE CONTROL HEADERS <---
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache'); // HTTP 1.0 backward compatibility
+        res.setHeader('Expires', '0'); // Proxies
+        // ---> END OF ADDED HEADERS <---
+
         res.status(200).json({ success: true, content: content });
 
     } catch (error: any) {
@@ -147,13 +148,12 @@ router.get('/get-file-content/:filename', async (req: AuthenticatedRequest, res:
         } else {
             console.error(`Error in /get-file-content/${requestedFilename} for user ${userId}:`, error);
             if (!res.headersSent) {
-                next(error);
+                next(error); // Pass to global error handler
             }
         }
     }
 });
 
-// --- Route: Delete a Specific File for User ---
 router.delete('/delete-file/:filename', async (req: AuthenticatedRequest, res: Response<DeleteFileClientResponse>, next: NextFunction) => {
     const userId = req.user?.id;
     const filenameToDelete = req.params.filename;
@@ -163,14 +163,13 @@ router.delete('/delete-file/:filename', async (req: AuthenticatedRequest, res: R
         return;
     }
 
-    // Only allow deleting .md files directly via this route. Summary files are deleted along with main file.
-    const safeFilenameRegex = /^[a-zA-Z0-9_.-]+(\.md)$/;
-    if (!filenameToDelete || !safeFilenameRegex.test(filenameToDelete) || filenameToDelete.includes('/') || filenameToDelete.includes('..')) {
+    const safeFilenameRegexMd = /^[a-zA-Z0-9_.-]+(\.md)$/; // Renamed for clarity
+    if (!filenameToDelete || !safeFilenameRegexMd.test(filenameToDelete) || filenameToDelete.includes('/') || filenameToDelete.includes('..')) {
         res.status(400).json({ success: false, error: 'Invalid filename format for deletion. Only .md files can be directly deleted.' });
         return;
     }
 
-    console.log(`Request to delete file: ${filenameToDelete} for user ${userId}`);
+    // console.log(`Request to delete file: ${filenameToDelete} for user ${userId}`); // Optional
 
     try {
         const result = await deleteUserGeneratedFile(userId, filenameToDelete, supabaseAdminClient, GENERATED_FILES_DIR);
@@ -180,18 +179,18 @@ router.delete('/delete-file/:filename', async (req: AuthenticatedRequest, res: R
             if (result.error?.includes('not found or not owned')) {
                 res.status(404).json({ success: false, error: result.error });
             } else if (result.error?.includes('Database error')) {
-                res.status(500).json({ success: false, error: result.error });
-            } else if (result.message && result.error) { // Partial success (DB deleted, file issue)
+                res.status(500).json({ success: false, error: result.error }); // Keep as 500 for DB issues
+            } else if (result.message && result.error) { 
                 res.status(207).json({ success: false, message: result.message, error: result.error });
             }
-            else { // General failure
+            else { 
                  res.status(500).json({ success: false, error: result.error || "Failed to delete file."});
             }
         }
-    } catch (error: any) { // Catch unexpected errors from the service call itself
+    } catch (error: any) { 
         console.error(`Unexpected error in /delete-file endpoint for user ${userId}, file ${filenameToDelete}:`, error);
         if (!res.headersSent) {
-            next(error);
+            next(error); // Pass to global error handler
         }
     }
 });

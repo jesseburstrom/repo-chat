@@ -195,7 +195,10 @@ export async function listGeneratedFiles(): Promise<ListGeneratedFilesResponse> 
 }
 
 export async function getFileContent(filename: string): Promise<GetFileContentResponse> {
-    return makeApiRequest<GetFileContentResponse>(`${API_PREFIX}/api/get-file-content/${encodeURIComponent(filename)}`);
+    // ---> ADD CACHE-BUSTING QUERY PARAMETER <---
+    const cacheBuster = `?t=${new Date().getTime()}`;
+    return makeApiRequest<GetFileContentResponse>(`${API_PREFIX}/api/get-file-content/${encodeURIComponent(filename)}${cacheBuster}`);
+    // ---> END OF CHANGE <---
 }
 
 interface RunRepomixParams {

@@ -1,7 +1,7 @@
 // gemini-repomix-ui/src/hooks/useApiKeyStatus.test.ts
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach, afterEach, type Mocked, type MockedFunction } from 'vitest'; // Import Mocked
-import { useApiKeyStatus, UseApiKeyStatusReturn } from './useApiKeyStatus';
+import { describe, it, expect, vi, beforeEach, type Mocked, type MockedFunction } from 'vitest'; // Import Mocked
+import { useApiKeyStatus } from './useApiKeyStatus';
 import * as apiOriginal from '../services/api'; // Original import
 import { useAuth } from '../contexts/AuthContext';
 
