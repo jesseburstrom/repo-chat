@@ -1,265 +1,191 @@
 # Gemini Repomix Assistant
 
-A web application that leverages Google's Gemini Pro API and the `repomix` tool to enable conversational interactions with the content of GitHub repositories. Generate a concise representation of a codebase and then chat with Gemini to understand, analyze, or query it.
+**Gemini Repomix Assistant** is a powerful web application designed to help you understand, analyze, and interact with code repositories using Google's Gemini AI models. It leverages [Repomix](https://repomix.com/) to create comprehensive context packs of your codebase, which are then used to fuel insightful conversations with Gemini.
 
----
+Ask questions about your code, get explanations, request refactoring suggestions, and much more, all within a user-friendly chat interface.
 
-## Table of Contents
+**(Placeholder for a screenshot or GIF of the application in action)**
 
-*   [Features](#features)
-*   [Architecture](#architecture)
-    *   [High-Level Overview](#high-level-overview)
-    *   [Repomix Generation Flow](#repomix-generation-flow)
-    *   [Chat Interaction Flow](#chat-interaction-flow)
-*   [Prerequisites](#prerequisites)
-*   [Setup](#setup)
-    *   [Backend](#backend)
-    *   [Frontend](#frontend)
-*   [Running the Application](#running-the-application)
-    *   [Backend Server](#backend-server)
-    *   [Frontend Dev Server](#frontend-dev-server)
-*   [Usage](#usage)
-*   [Environment Variables](#environment-variables)
-*   [Technology Stack](#technology-stack)
-*   [Contributing](#contributing)
+## Key Features
 
----
+*   **Repository Analysis with AI:**
+    *   Connect to any public GitHub repository.
+    *   Generate a "Repomix pack" – a single file containing a structured representation of your selected codebase.
+    *   Chat with Gemini AI, using the generated pack as a rich context source.
+*   **Intelligent Chat Interface:**
+    *   Converse with Gemini models about your code.
+    *   Support for chat history to maintain conversation flow.
+    *   Markdown rendering for responses, including syntax-highlighted code blocks.
+*   **Contextual Code Interaction:**
+    *   **File Tree Navigation:** View the directory structure of your Repomix pack.
+    *   **Selective File Context:** Choose specific files from the tree to include in your prompts to Gemini, focusing the AI's attention.
+    *   **File Content Viewer:** Inspect the content of any file from the pack with syntax highlighting.
+    *   **Code Comparison:** When Gemini suggests code changes for a file, easily view a side-by-side comparison of the original and suggested code.
+*   **User-Specific Configuration:**
+    *   **Secure API Key Management:** Store your Google Gemini API key securely per user.
+    *   **Customizable System Prompts:** Define and save your own system prompts to tailor Gemini's behavior for different tasks.
+    *   **Model Selection:** Choose from a range of available Gemini models. Your last selected model is remembered.
+*   **Cost Tracking:**
+    *   Get estimates for token usage (input/output) and associated costs for each Gemini API call.
+    *   View total session costs and token counts.
+*   **Authentication:**
+    *   Secure user authentication via Email/Password or GitHub OAuth, powered by Supabase.
+*   **Repomix Integration:**
+    *   Specify include/exclude patterns for files when generating Repomix packs.
+    *   List and load previously generated packs.
+    *   Manually upload existing Repomix pack files.
 
-## Features
+## How It Works
 
-*   **Repository Description Generation:** Enter a GitHub repository URL to generate a packed description file using `repomix`.
-*   **Customizable Filtering:** Specify include/exclude file patterns for `repomix` generation.
-*   **Description File Management:**
-    *   Lists previously generated repository description files.
-    *   Allows selecting a generated file to load its content.
-    *   Automatically loads newly generated files.
-*   **Context-Aware Chat:** Interact with Google's Gemini Pro API. The content of the selected/generated repository description file is automatically included as context in the conversation.
-*   **Chat History:** Maintains conversation history within a session (limited turns sent to API for efficiency).
-*   **Markdown & Syntax Highlighting:** Renders model responses with Markdown formatting and syntax highlighting for code blocks using Shikiji.
-*   **Responsive UI:** Clean interface built with React and TypeScript.
-*   **Clear Backend/Frontend Separation:** Node.js/Express backend handles API calls and `repomix` execution, while the React frontend manages the user interface.
-*   **Auto-Resizing Input:** Chat input area expands automatically for multi-line messages.
+1.  **Authenticate:** Sign up or log in to your account.
+2.  **Set API Key:** Provide your Google Gemini API key (you can get one from [Google AI Studio](https://aistudio.google.com/app/apikey)). This is stored securely and associated with your user account.
+3.  **Generate or Select Repo Pack:**
+    *   Enter a public GitHub repository URL. The backend will run Repomix to generate a context pack.
+    *   Or, select a previously generated pack from your list.
+    *   Or, manually upload a `.md` or `.txt` Repomix pack file.
+4.  **Configure (Optional):**
+    *   Set a custom system prompt to guide the AI's responses.
+    *   Choose your preferred Gemini model.
+5.  **Chat & Analyze:**
+    *   Use the chat interface to ask questions or give instructions to Gemini regarding the loaded repository context.
+    *   Select specific files from the repository's file tree to be included as focused context in your next prompt.
+    *   View file contents or compare AI-suggested code changes.
 
----
+## Tech Stack
 
-## Architecture
+*   **Frontend:**
+    *   React
+    *   TypeScript
+    *   Tailwind CSS
+    *   Vite (Build Tool)
+    *   Shikiji (Syntax Highlighting)
+*   **Backend:**
+    *   Node.js
+    *   Express.js
+    *   TypeScript
+*   **AI:**
+    *   Google Gemini API
+*   **Authentication & Database:**
+    *   Supabase (Auth, PostgreSQL for user configurations)
+*   **Code Packing:**
+    *   Repomix CLI (assumed to be an external tool called by the backend)
 
-The application consists of a React frontend and a Node.js backend.
+## Setup and Installation
 
-### High-Level Overview
+### Prerequisites
 
-```mermaid
-graph TD
-    User["<fa:fa-user> User"] --> UI;
-    UI{"<fa:fa-window-maximize> React Frontend (Vite)"} -- HTTP API Request /api/... --> Backend;
-    Backend{"<fa:fa-server> Node.js Backend (Express)"} -- Run Command --> Repomix;
-    Repomix("npx repomix") -- Writes File --> FileSystem["<fa:fa-file-alt> generated_files/*.md"];
-    Backend -- Reads File --> FileSystem;
-    Backend -- API Call --> GeminiAPI["<fa:fa-brain> Google Gemini API"];
-    GeminiAPI -- Response --> Backend;
-    Backend -- HTTP Response --> UI;
-    UI -- Displays Info --> User;
+*   Node.js (LTS version recommended)
+*   npm or yarn
+*   Git
+*   Access to a Supabase project
+*   Google Gemini API Key
 
-    style UI fill:#f9f,stroke:#333,stroke-width:2px;
-    style Backend fill:#ccf,stroke:#333,stroke-width:2px;
-    style Repomix fill:#f8d7da,stroke:#721c24
-    style FileSystem fill:#fff3cd,stroke:#856404
-    style GeminiAPI fill:#d4edda,stroke:#155724
-```
-### Repomix Generation Flow (Simplified)
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI (React)
-    participant Backend (Express)
-    participant Repomix
-
-    User->>UI: Request Repo Generation
-    UI->>Backend: Trigger Repomix run
-    Backend->>Repomix: Execute command
-    Repomix-->>Backend: Command Complete (Success/Fail)
-    Backend-->>UI: Generation Result (Filename or Error)
-    UI->>User: Display Status (Success/Error + Load File)
-```
-### Chat Interaction Flow (Simplified)
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI (React)
-    participant Backend (Express)
-    participant GeminiAPI
-
-    User->>UI: Send Prompt (+ Attached Context)
-    UI->>Backend: Forward Prompt + Context
-    Backend->>GeminiAPI: Call API with Message
-    GeminiAPI-->>Backend: API Response Text
-    Backend-->>UI: Return Response Text
-    UI->>User: Display Model Response
-```
-### Repomix Generation Flow
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI (React)
-    participant Backend (Express)
-    participant Repomix (CLI via npx)
-    participant FileSystem
-
-    User->>UI: Enters GitHub Repo URL & Clicks Generate
-    UI->>Backend: POST /api/run-repomix (repoUrl, include, exclude)
-    Backend->>Repomix: Executes `npx repomix ... --output temp_file.md`
-    Note over Repomix, Backend: Repomix clones repo, processes files, writes temp file, outputs summary to stdout.
-    Repomix-->>Backend: Command finishes (stdout/stderr)
-
-    alt Command Successful
-        Backend->>Backend: Extracts & cleans summary from stdout
-        Backend->>FileSystem: Writes cleaned `user_repo_pack_summary.txt`
-        Backend->>FileSystem: Renames `temp_file.md` to `user_repo.md`
-        Backend->>UI: Response { success: true, outputFilename: "user_repo.md", message: "..." }
-
-        UI->>Backend: GET /api/list-generated-files (Refreshes list)
-        Backend-->>UI: Response { success: true, data: [... only .md files] }
-
-        UI->>Backend: GET /api/get-file-content/user_repo.md (Auto-loads main file)
-        Backend-->>FileSystem: Read `user_repo.md`
-        FileSystem-->>Backend: File Content
-        Backend-->>UI: Response { success: true, content: "..." }
-        UI->>User: Shows success message, updates dropdown, attaches .md content
-    else Command Fails
-        Backend->>UI: Response { success: false, error: "..." }
-        UI->>User: Shows error message
-    end
-```
-### Chat Interaction Flow
-```mermaid
-sequenceDiagram
-    participant User
-    participant UI (React)
-    participant Backend (Express)
-    participant GeminiAPI
-
-    User->>UI: Selects generated file (or keeps loaded one)
-    User->>UI: Types prompt & Clicks Send (or Enter)
-    UI->>UI: Combines Attached .md File Content + User Prompt
-    UI->>Backend: POST /api/call-gemini (history, combinedPrompt)
-    Backend->>GeminiAPI: Sends chat history + new combined message
-    GeminiAPI-->>Backend: Receives model response text
-    Backend->>UI: Response { success: true, text: "..." }
-    UI->>UI: Clears attached file state
-    UI->>UI: Renders model response (Markdown/Syntax Highlighting)
-    UI->>User: Displays model response (Chat auto-scrolls)
-```
-## Prerequisites
-
-*   **Node.js:** LTS version recommended (e.g., v18 or v20+). Includes `npm`.
-*   **Git:** Required by `repomix` to clone repositories.
-*   **Google Gemini API Key:** Obtain an API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
-
----
-
-## Setup
+### Backend Setup
 
 1.  **Clone the repository:**
     ```bash
-    git clone <your-repository-url>
-    cd <repository-directory>
+    git clone <repository_url>
+    cd <repository_name>/backend
     ```
-
-2.  **Backend Setup:**
+2.  **Install dependencies:**
     ```bash
-    cd backend
-    npm install # or yarn install
+    npm install
+    # or
+    yarn install
     ```
-    *   Create a `.env` file in the `backend` directory:
-        ```bash
-        touch .env
-        ```
-    *   Add your Google Gemini API key to the `.env` file:
-        ```env
-        # backend/.env
-        GEMINI_API_KEY=YOUR_API_KEY_HERE
-        ```
+3.  **Create a `.env` file** in the `backend` directory with the following content:
+    ```env
+    PORT=8003
 
-3.  **Frontend Setup:**
+    # Supabase Configuration
+    SUPABASE_URL=your_supabase_project_url
+    SUPABASE_ANON_KEY=your_supabase_anon_key
+    SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key # For admin operations
+
+    # Optional: Repomix executable path if not in PATH or using a specific version
+    # REPOMIX_EXECUTABLE="npx repomix"
+    ```
+    *   Replace placeholders with your actual Supabase project credentials.
+    *   The `SUPABASE_SERVICE_ROLE_KEY` is required for backend operations that need admin privileges (e.g., managing user API keys securely).
+
+4.  **Database Schema:**
+    The backend relies on two tables in your Supabase database:
+    *   `user_gemini_keys`:
+        *   `user_id` (UUID, primary key, foreign key to `auth.users.id`)
+        *   `api_key` (TEXT, encrypted or appropriately secured)
+        *   `last_selected_model` (TEXT, nullable)
+        *   `created_at` (TIMESTAMPTZ, default `now()`)
+        *   `updated_at` (TIMESTAMPTZ, default `now()`)
+    *   `user_system_prompts`:
+        *   `user_id` (UUID, primary key, foreign key to `auth.users.id`)
+        *   `prompt_content` (TEXT)
+        *   `created_at` (TIMESTAMPTZ, default `now()`)
+        *   `updated_at` (TIMESTAMPTZ, default `now()`)
+
+    You'll need to set up these tables and enable Row Level Security (RLS) policies appropriately. For example, users should only be able to access/modify their own data. The service role key bypasses RLS for trusted backend operations.
+
+5.  **Start the backend server:**
+    ```bash
+    npm run dev # (or your configured start script)
+    ```
+
+### Frontend Setup
+
+1.  **Navigate to the frontend directory:**
     ```bash
     cd ../gemini-repomix-ui
-    npm install # or yarn install
     ```
+2.  **Install dependencies:**
+    ```bash
+    npm install
+    # or
+    yarn install
+    ```
+3.  **Create a `.env` file** in the `gemini-repomix-ui` directory with your Supabase public credentials:
+    ```env
+    VITE_SUPABASE_URL=your_supabase_project_url
+    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+    ```
+4.  **Start the frontend development server:**
+    ```bash
+    npm run dev
+    ```
+    The application should now be accessible, typically at `http://localhost:5173/repochat/`. The backend API calls will be proxied to `http://localhost:8003` as configured in `vite.config.ts`.
 
----
+## Usage Guide
 
-## Running the Application
-
-You need to run both the backend and frontend servers concurrently.
-
-### Backend Server
-
-```bash
-cd backend
-npm run start # Check package.json for the exact start script (e.g., could be 'dev' if using ts-node-dev)
-```
-
-The backend server will typically start on `http://localhost:8003`. Generated description files will be stored in `backend/generated_files`.
-
-### Frontend Dev Server
-
-```bash
-cd gemini-repomix-ui
-npm run dev
-```
-
-The frontend development server (Vite) will start, usually on `http://localhost:5173`.
-
-**Access the application** in your browser at the URL provided by the Vite server, likely `http://localhost:5173/repochat/` (Note the `/repochat/` base path defined in `vite.config.ts`).
-
-The Vite dev server is configured to proxy requests starting with `/api` to the backend server running on port 8003.
-
----
-
-## Usage
-
-1.  **Start both** the backend and frontend servers as described above.
-2.  **Open the application** in your web browser (e.g., `http://localhost:5173/repochat/`).
-3.  **Generate a Description:**
-    *   Enter the full URL of a public GitHub repository (e.g., `https://github.com/user/repo.git`).
-    *   (Optional) Adjust the include/exclude patterns. Defaults target common code files and exclude logs/temp files.
-    *   Click "Generate Description File".
-    *   Wait for the process to complete. The backend runs `repomix`, which clones the repo and creates the `.md` file.
-    *   Upon successful generation, the file will be automatically selected and its content loaded into the chat context.
-4.  **Or Load an Existing Description:**
-    *   If descriptions have been generated previously, use the "Load Generated Description" dropdown to select one.
-    *   The content of the selected file will be loaded into the chat context.
-5.  **Chat with Gemini:**
-    *   The loaded description file's name will appear below the input area.
-    *   Type your question or prompt about the repository code (e.g., "Explain the purpose of the main function in server.ts", "Summarize the UI components", "What state management is used?").
+1.  **Authentication:** Open the application in your browser. You'll be prompted to log in or sign up.
+2.  **Set Gemini API Key:**
+    *   After logging in, if you haven't set your Gemini API key, a modal will appear.
+    *   Enter your API key. You can get one from [Google AI Studio](https://aistudio.google.com/app/apikey). Ensure billing is enabled for the models you intend to use.
+    *   You can also access this modal via the "Set API Key" button in the header if no key is set.
+3.  **Generate a Repomix Pack:**
+    *   In the "Generate Project Description" section, enter the GitHub URL of the repository you want to analyze.
+    *   Adjust include/exclude patterns if needed (defaults are provided for common source code files).
+    *   Click "Generate Description File". The backend will process the repo, and the new pack will appear in the "Load Generated Description" dropdown. It will also be automatically loaded.
+4.  **Load an Existing Pack:**
+    *   Select a previously generated pack from the "Load Generated Description" dropdown.
+    *   Alternatively, click the "📎" (attach) button next to the prompt input to upload a Repomix file (usually `.md` or `.txt`) from your local system.
+5.  **Chatting with Gemini:**
+    *   Type your questions or instructions into the prompt input area at the bottom.
     *   Press Enter or click "Send".
-    *   The frontend sends your prompt *along with the content of the loaded description file* to the backend, which forwards it to the Gemini API.
-    *   View the model's response in the chat interface. The loaded file context is cleared after a successful response, ready for the next interaction (which might use the same file if selected again or a different one).
+    *   The AI's response will appear in the chat interface.
+6.  **Using the File Tree (Fullscreen View):**
+    *   Once a Repomix pack is loaded, you can click the "↔️ Expand" button in the header to enter fullscreen view.
+    *   The file tree on the left shows the structure of the loaded repository.
+    *   **View File:** Click on a file name in the tree to view its content in the rightmost panel.
+    *   **Select for Prompt:** Check the box next to a file (or multiple files) to include its content directly in your next prompt to Gemini. This is useful for focusing the AI on specific parts of the codebase. Use "Select All" / "Deselect All" for convenience.
+7.  **Code Comparison:**
+    *   If Gemini's response includes a code block with a file path (e.g., `// src/utils/helper.ts`), a "Compare" button will appear next to the code block.
+    *   Clicking "Compare" opens a side-by-side view showing the original file content (from your Repomix pack) and Gemini's suggested changes. This requires the file path in the code block to match a file in the loaded Repomix pack.
+8.  **System Prompt:**
+    *   Click "Set System Prompt" to reveal a textarea.
+    *   Enter instructions to guide Gemini's persona, response style, or task focus (e.g., "You are a helpful assistant specializing in Python code reviews.").
+    *   Click "Save to DB" to store this prompt for future sessions. It's loaded automatically.
+9.  **Model Selection:**
+    *   Use the "Select Model" dropdown in the "AI Model & Usage" section to choose different Gemini models.
+    *   Capabilities and pricing notes for the selected model are displayed.
+    *   Token usage and estimated costs are shown for the current call and the total session.
 
 ---
-
-## Environment Variables
-
-*   `GEMINI_API_KEY` (Required): Your API key for accessing the Google Gemini API. Place this in the `backend/.env` file.
-
----
-
-## Technology Stack
-
-*   **Backend:** Node.js, Express, TypeScript
-*   **Frontend:** React, Vite, TypeScript, CSS
-*   **API:** Google Gemini Pro
-*   **Code Processing:** Repomix
-*   **Syntax Highlighting:** Shikiji
-
----
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit pull requests or open issues.
-
-*(Optional: Add more specific contribution guidelines if needed - e.g., coding style, testing requirements)*
-
-
-```
 
