@@ -18,7 +18,7 @@ import AuthForm from './AuthForm';
 import ApiKeyModal from './ApiKeyModal';
 
 // Import API service and types
-import * as api from './services/api'; // Keep for API key status, callGemini
+import * as api from './services/api';
 
 export interface ChatMessage {
   role: "user" | "model";
@@ -42,8 +42,9 @@ function App() {
         generateRepomixFile, loadRepoFileContent, handleManualFileAttach,
         selectFileForViewing, togglePromptSelectedFile, selectAllPromptFiles, deselectAllPromptFiles,
         clearCurrentRepomixData,
-        deleteRepomixFile, // Get from context
-        
+        deleteRepomixFile,
+        repoUrl,         // <<<<--- GET repoUrl FROM CONTEXT
+        setRepoUrl,      // <<<<--- GET setRepoUrl FROM CONTEXT
     } = useRepomixContext();
 
     // --- UI State ---
@@ -86,34 +87,33 @@ function App() {
                     }
                 } else {
                     console.error("[App] Failed to get API key status:", statusResult.error);
-                    setChatError("Could not verify Gemini API key status."); // Show error to user
-                    setUserHasGeminiKey(false); // Assume no key on error
+                    setChatError("Could not verify Gemini API key status.");
+                    setUserHasGeminiKey(false);
                 }
                 setApiKeyStatusLoading(false);
-            } else if (!session && !authIsLoading) { // If no session and auth is done
+            } else if (!session && !authIsLoading) {
                  setUserHasGeminiKey(null);
                  setShowApiKeyModal(false);
                  setApiKeyStatusLoading(false);
             }
         };
         checkApiKeyStatus();
-    }, [session, user, authIsLoading]); // Re-check when session/auth state changes
+    }, [session, user, authIsLoading]);
 
     // --- Callback for API Key Modal ---
     const handleApiKeySubmitted = useCallback(() => {
-        if (session && user && !authIsLoading) { // Ensure user and session exist
+        if (session && user && !authIsLoading) {
             setApiKeyStatusLoading(true);
             api.getGeminiApiKeyStatus().then(statusResult => {
                 if (statusResult.success) {
                     setUserHasGeminiKey(statusResult.hasKey ?? false);
                     if (statusResult.hasKey) {
                         setShowApiKeyModal(false);
-                        setChatError(null); // Clear previous errors
-                        updateGeminiConfig(); // Refresh model config as key might enable new models
+                        setChatError(null);
+                        updateGeminiConfig();
                     }
                 } else {
                      console.error("[App] Error re-checking API key status after submission:", statusResult.error);
-                     // Potentially set an error message for the user here
                 }
                 setApiKeyStatusLoading(false);
             }).catch(err => {
@@ -139,7 +139,7 @@ function App() {
         if (parsedRepomixData || comparisonView) {
             setIsFullScreenView(prev => !prev);
         } else {
-            setIsFullScreenView(false); // Ensure it's false if no data
+            setIsFullScreenView(false);
         }
     };
 
@@ -147,7 +147,7 @@ function App() {
     const handleStartComparison = (filePath: string, suggestedContent: string) => {
         if (parsedRepomixData?.fileContents[filePath]) {
             setComparisonView({ filePath, originalContent: parsedRepomixData.fileContents[filePath], suggestedContent });
-            setIsFullScreenView(true); // Auto-enter fullscreen for comparison
+            setIsFullScreenView(true);
         } else {
             setChatError(`Original content for ${filePath} not found for comparison.`);
         }
@@ -160,7 +160,7 @@ function App() {
             setChatError("Gemini API Key is not set. Please set your API key.");
             setShowApiKeyModal(true); return;
         }
-        if (userHasGeminiKey === null && !apiKeyStatusLoading) { // Status check failed or pending
+        if (userHasGeminiKey === null && !apiKeyStatusLoading) {
             setChatError("Could not verify API key status. Please try again or set your key.");
             setShowApiKeyModal(true); return;
         }
@@ -195,7 +195,7 @@ function App() {
             contextDescriptor = `(Using ${promptSelectedFilePaths.length} selected files)`;
         } else if (parsedRepomixData && currentAttachedFileName) {
             contextDescriptor = `(Context: ${currentAttachedFileName})`;
-        } else if (currentAttachedFileName) { // Manually attached file, parsedRepomixData might be null
+        } else if (currentAttachedFileName) {
              contextDescriptor = `(Regarding file: ${currentAttachedFileName})`;
         }
 
@@ -209,15 +209,13 @@ function App() {
         const userDisplayPrompt = prompt || contextDescriptor || "Analyze request";
         const newUserMessage: ChatMessage = { role: 'user', parts: [{ text: userDisplayPrompt }] };
 
-        // Prepare history for backend (limit turns)
         const historyForBackend: ChatMessage[] = chatHistory.slice(-MAX_HISTORY_TURNS * 2).map(msg => ({ role: msg.role, parts: msg.parts }));
         setChatHistory(prev => [...prev, newUserMessage]);
 
         const result = await api.callGemini({
             history: historyForBackend,
             newMessage: combinedPromptForApi,
-            // systemPrompt is now handled by backend using user's stored preference
-            modelCallName: selectedModelCallName, // User's current UI selection
+            modelCallName: selectedModelCallName,
         });
 
         if (result.success && result.text) {
@@ -237,12 +235,11 @@ function App() {
         } else {
             const errorMessage = result.error || "Gemini API call failed.";
             setChatError(`Error: ${errorMessage}`);
-            // If API key related error, trigger modal
             if (errorMessage.toLowerCase().includes("api key") || errorMessage.toLowerCase().includes("permission_denied") || result.error?.includes("402") || result.error?.includes("403")) {
-                setUserHasGeminiKey(false); // Assume key is invalid or missing
+                setUserHasGeminiKey(false);
                 setShowApiKeyModal(true);
             }
-            setChatHistory(prev => prev.slice(0, -1)); // Remove the user's pending message
+            setChatHistory(prev => prev.slice(0, -1));
         }
         setChatIsLoading(false);
 
@@ -262,16 +259,13 @@ function App() {
                  return `${promptSelectedFilePaths.length} file(s) selected for prompt`;
             }
         }
-        // If a repo file is selected from dropdown and parsed
         if (selectedRepoFile && parsedRepomixData) {
             return selectedRepoFile;
         }
-        // If a file was manually attached and parsed
         if (!selectedRepoFile && parsedRepomixData && attachmentStatus?.startsWith("Attached & Parsed")) {
-             // Try to extract a name; this logic might need refinement based on how manual attach sets names
             return attachmentStatus.replace("Attached & Parsed ", "").replace(" successfully.", "") || "Manually attached file";
         }
-        return null; // No specific file or selection for display
+        return null;
     }, [promptSelectedFilePaths, allFilePathsInCurrentRepomix, selectedRepoFile, parsedRepomixData, attachmentStatus]);
 
 
@@ -282,11 +276,9 @@ function App() {
     // --- SignOut Handler ---
     const handleSignOut = async () => {
         await signOut();
-        // Clear local states that might persist across users if not careful
         setChatHistory([]);
-        setSystemPrompt(''); // Reset system prompt from hook if not auto-reset by hook on auth change
-        clearCurrentRepomixData(); // Clear repomix context data
-        // Other state resets as needed
+        setSystemPrompt('');
+        clearCurrentRepomixData();
     };
 
 
@@ -300,13 +292,12 @@ function App() {
 
     // --- Tailwind Class Definitions ---
     const appContainerBaseClasses = "flex flex-col h-screen bg-white border border-[#e7eaf3] overflow-hidden";
-    const appContainerNormalClasses = "w-[80%] mx-auto my-[30px] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.08),_0_1px_3px_rgba(0,0,0,0.05)] h-[calc(100vh_-_60px)]"; // Added my-[30px] and adjusted height
-    const appContainerFullscreenClasses = "w-full max-w-none m-0 border-none rounded-none shadow-none h-screen"; // Full height for fullscreen
+    const appContainerNormalClasses = "w-[80%] mx-auto my-[30px] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.08),_0_1px_3px_rgba(0,0,0,0.05)] h-[calc(100vh_-_60px)]";
+    const appContainerFullscreenClasses = "w-full max-w-none m-0 border-none rounded-none shadow-none h-screen";
 
     const mainContentWrapperBaseClasses = "flex flex-row flex-grow overflow-hidden";
-    // Adjusted height calculation for normal view to account for header/footer and potential margins
-    const mainContentWrapperHeight = "h-[calc(100%_-_70px_-_45px)]"; // 100% of parent - header - footer
-    const fullscreenMainContentHeight = "h-[calc(100vh_-_70px_-_0px)]"; // Fullscreen, no footer visible perhaps, or footer is overlayed or context-dependent
+    const mainContentWrapperHeight = "h-[calc(100%_-_70px_-_45px)]";
+    const fullscreenMainContentHeight = "h-[calc(100vh_-_70px_-_0px)]";
 
 
     const fileTreeFullscreenClasses = "w-[22%] max-w-[450px] h-full flex-shrink-0";
@@ -355,7 +346,7 @@ function App() {
                             onClick={toggleFullScreenView}
                             className={headerActionButtonBaseClasses}
                             title={isFullScreenView ? "Exit Full Screen View" : "Expand File View"}
-                            disabled={anyLoading && isFullScreenView} // Prevent collapsing while loading in FS
+                            disabled={anyLoading && isFullScreenView}
                         >
                             {isFullScreenView ? '📰 Collapse' : '↔️ Expand'}
                         </button>
@@ -399,7 +390,9 @@ function App() {
                                 <div className={controlPanelBaseClasses}>
                                     <RepomixForm
                                         onGenerate={generateRepomixFile}
-                                        isGenerating={repomixIsLoading && !parsedRepomixData && !selectedRepoFile} // More specific: loading AND no file is yet fully processed/selected
+                                        isGenerating={repomixIsLoading && !parsedRepomixData && !selectedRepoFile}
+                                        repoUrl={repoUrl} // <<<<--- PASS repoUrl
+                                        onRepoUrlChange={setRepoUrl} // <<<<--- PASS setRepoUrl
                                     />
                                  </div>
                                 <div className={controlPanelBaseClasses}>
@@ -408,8 +401,8 @@ function App() {
                                         onSelectRepo={loadRepoFileContent}
                                         isLoading={repomixIsLoading && (!selectedRepoFile || selectedRepoFile !== availableRepos.find(r=>r.filename === selectedRepoFile)?.filename)}
                                         selectedValue={selectedRepoFile || ""}
-                                        onDeleteRepo={deleteRepomixFile} // Pass the delete function
-                                        isDeleting={repomixIsLoading && !!selectedRepoFile} // Indicate deleting if loading and a file is selected
+                                        onDeleteRepo={deleteRepomixFile}
+                                        isDeleting={repomixIsLoading && !!selectedRepoFile}
                                     />
                                  </div>
                                 <div className={`${controlPanelBaseClasses}`}>

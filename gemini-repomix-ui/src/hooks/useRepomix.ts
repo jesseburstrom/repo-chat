@@ -220,9 +220,10 @@ export function useRepomix(initialRepoUrl: string = '') {
         // console.log(`[useRepomix] Generating Repomix file for ${generateRepoUrl}...`);
         const result = await apiRunRepomix({ repoUrl: generateRepoUrl, includePatterns, excludePatterns });
 
-        if (result.success && result.outputFilename) {
-            justGeneratedFile.current = result.outputFilename;
-            setGenerationMessage(`Success! Output: ${result.outputFilename}. Refreshing list...`);
+        if (result.success && result.data && result.data.newFile && result.data.newFile.filename) {
+            const outputFilename = result.data.newFile.filename;
+            justGeneratedFile.current = outputFilename;
+            setGenerationMessage(`Success! Output: ${outputFilename}. Refreshing list...`);
             // Fetching available repos will trigger the useEffect to load the new file
             await fetchAvailableRepos(); 
         } else {

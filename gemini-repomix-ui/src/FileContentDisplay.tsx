@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getHighlighter, bundledLanguages } from 'shikiji';
 import type { Highlighter } from 'shikiji';
-// Removed: import './FileContentDisplay.css'; // Tailwind migration
 
 // --- Reusable Shikiji Hook ---
 const useShikijiHighlighterInstance = () => {
@@ -44,20 +43,19 @@ interface ComparisonViewData {
 
 // --- Props for the main component ---
 interface FileContentDisplayProps {
-    // For single file view
     filePath: string | null;
     content: string | null;
     isLoading: boolean;
-
-    // For comparison view
     comparisonData: ComparisonViewData | null;
     onCloseComparison?: () => void;
 }
 
 // Base Tailwind classes for the content area to be reused
-// ADDED overflow-x-auto HERE
-const contentAreaClasses = "flex-grow overflow-y-auto overflow-x-auto font-mono text-sm leading-snug";
 const placeholderClasses = "text-gray-500 italic text-center pt-[30px] font-sans";
+
+// ++ MODIFIED: Added min-h-0 to allow the flex item to shrink correctly and enable scrolling ++
+const contentAreaClasses = "flex-grow overflow-y-auto overflow-x-auto font-mono text-sm leading-snug min-h-0";
+
 
 // --- CodePane Sub-Component ---
 const CodePane: React.FC<{ content: string; language: string; highlighter: Highlighter | null; title: string }> =
@@ -67,15 +65,12 @@ const CodePane: React.FC<{ content: string; language: string; highlighter: Highl
 
     useEffect(() => {
         let isActive = true;
-
         const highlightContent = async () => {
-            // Normalize line endings for the content prop to LF
             const normalizedContent = typeof content === 'string'
                 ? content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
                 : '';
 
             if (!highlighter) {
-                // Fallback: Render plain text, ensure HTML entities are escaped
                 const safeContent = normalizedContent
                     .replace(/&/g, "&")
                     .replace(/</g, "<")
@@ -90,14 +85,12 @@ const CodePane: React.FC<{ content: string; language: string; highlighter: Highl
             if (isActive) setIsHighlighting(true);
 
             try {
-                // Use normalizedContent with the highlighter
                 const resultHtml: string = await highlighter.codeToHtml(normalizedContent, { lang: language, theme: 'material-theme-lighter' });
                 if (isActive) {
                     setHtml(resultHtml);
                 }
             } catch (err: any) {
                 console.warn(`Highlighting error for ${title} (lang: ${language}):`, err);
-                // Fallback if highlighting fails, ensure HTML entities are escaped
                 const safeContent = normalizedContent
                     .replace(/&/g, "&")
                     .replace(/</g, "<")
@@ -111,15 +104,12 @@ const CodePane: React.FC<{ content: string; language: string; highlighter: Highl
                 }
             }
         };
-
         highlightContent();
-
         return () => { isActive = false; };
     }, [content, language, highlighter, title]);
 
     if (isHighlighting && !html) return <div className={placeholderClasses}>Highlighting {title}...</div>;
 
-    // Fallback rendering if html is still null
     if (!html) {
         const normalizedContent = typeof content === 'string'
             ? content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
@@ -131,6 +121,8 @@ const CodePane: React.FC<{ content: string; language: string; highlighter: Highl
         return <pre className="m-0 whitespace-pre-wrap break-words p-[5px] bg-[#f8f8f8]"><code className="block">{safeContent}</code></pre>;
     }
     
+    // This div itself should naturally size to its content (the <pre> tag from Shikiji)
+    // The parent (with contentAreaClasses) is responsible for scrolling.
     return <div className="font-mono text-sm leading-snug" dangerouslySetInnerHTML={{ __html: html }} />;
 });
 // --- End CodePane Sub-Component ---
@@ -150,18 +142,12 @@ const FileContentDisplay: React.FC<FileContentDisplayProps> = ({
     const comparisonOriginalLanguage = useMemo(() => getLanguageFromPath(comparisonData?.filePath || null), [comparisonData?.filePath]);
     const comparisonSuggestedLanguage = comparisonOriginalLanguage;
 
-    // Base classes for the main panel
-    // overflow-hidden here is correct - we want the *inner* .content-area to scroll, not the whole panel
     const panelBaseClasses = "p-2.5 bg-white border-l border-gray-300 overflow-hidden h-full flex-shrink-0 flex flex-col";
-    // Width is applied by the parent App.tsx
-
-    // Base classes for the h4 title
     const h4BaseClasses = "mt-0 mb-2.5 text-[0.95em] text-gray-700 font-medium border-b border-gray-200 pb-[5px] whitespace-nowrap overflow-hidden text-ellipsis flex-shrink-0";
 
     if (comparisonData) {
         return (
             <div className={`${panelBaseClasses}`}>
-                {/* Comparison Header */}
                 <div className="flex justify-between items-center flex-shrink-0">
                     <h4 className={`${h4BaseClasses} border-b-0 mb-0`}>
                         Comparing: {comparisonData.filePath}
@@ -175,25 +161,20 @@ const FileContentDisplay: React.FC<FileContentDisplayProps> = ({
                         </button>
                     )}
                 </div>
-                {/* Comparison Panes */}
-                <div className="flex flex-row flex-grow overflow-hidden gap-2.5 border-t border-gray-200 pt-2.5">
-                     {/* Original Pane */}
+                <div className="flex flex-row flex-grow overflow-hidden gap-2.5 border-t border-gray-200 pt-2.5 min-h-0"> {/* Added min-h-0 here too for the flex-row container */}
                     <div className="flex-1 flex flex-col overflow-hidden border border-gray-100 rounded">
                         <h5 className="m-0 px-2 py-[5px] bg-gray-50 text-sm font-medium border-b border-gray-300 flex-shrink-0">
                             Original
                         </h5>
-                         {/* Uses contentAreaClasses which now includes overflow-x-auto */}
-                        <div className={`${contentAreaClasses} bg-gray-50`}>
+                        <div className={`${contentAreaClasses} bg-gray-50`}> {/* contentAreaClasses already has min-h-0 */}
                             <CodePane title="Original" content={comparisonData.originalContent} language={comparisonOriginalLanguage} highlighter={highlighter} />
                         </div>
                     </div>
-                     {/* Suggested Pane */}
                     <div className="flex-1 flex flex-col overflow-hidden border border-gray-100 rounded">
                         <h5 className="m-0 px-2 py-[5px] bg-gray-50 text-sm font-medium border-b border-gray-300 flex-shrink-0">
                             Suggested
                         </h5>
-                         {/* Uses contentAreaClasses which now includes overflow-x-auto */}
-                        <div className={`${contentAreaClasses} bg-gray-50`}>
+                        <div className={`${contentAreaClasses} bg-gray-50`}> {/* contentAreaClasses already has min-h-0 */}
                              <CodePane title="Suggested" content={comparisonData.suggestedContent} language={comparisonSuggestedLanguage} highlighter={highlighter} />
                         </div>
                     </div>
@@ -202,16 +183,13 @@ const FileContentDisplay: React.FC<FileContentDisplayProps> = ({
         );
     }
 
-    // --- Single File View ---
-
     if (isLoading) {
         return (
             <div className={`${panelBaseClasses}`}>
                 <h4 className={h4BaseClasses}>
                     {filePath ? `Loading: ${filePath}` : 'Loading...'}
                 </h4>
-                {/* Placeholder doesn't need horizontal scroll */}
-                <div className={`flex-grow overflow-y-auto ${placeholderClasses}`}>
+                <div className={`flex-grow overflow-y-auto ${placeholderClasses}`}> {/* Placeholder doesn't need min-h-0 usually */}
                     Loading file content...
                 </div>
             </div>
@@ -222,7 +200,6 @@ const FileContentDisplay: React.FC<FileContentDisplayProps> = ({
         return (
             <div className={`${panelBaseClasses}`}>
                 <h4 className={h4BaseClasses}>File Content</h4>
-                 {/* Placeholder doesn't need horizontal scroll */}
                 <div className={`flex-grow overflow-y-auto ${placeholderClasses}`}>
                     Select a file from the tree to view its content.
                 </div>
@@ -230,12 +207,10 @@ const FileContentDisplay: React.FC<FileContentDisplayProps> = ({
         );
     }
 
-    // Default view: showing single file content
     return (
         <div className={`${panelBaseClasses}`}>
             <h4 className={h4BaseClasses}>Content: {filePath}</h4>
-            {/* Uses contentAreaClasses which now includes overflow-x-auto */}
-            <div className={contentAreaClasses}>
+            <div className={contentAreaClasses}> {/* contentAreaClasses has min-h-0 */}
                  <CodePane title="File Content" content={content} language={singleFileLanguage} highlighter={highlighter} />
             </div>
         </div>

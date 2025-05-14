@@ -1,21 +1,23 @@
 // gemini-repomix-ui/src/contexts/RepomixContext.tsx
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
-import * as api from '../services/api'; // Ensure RunRepomixResponse & DeleteFileApiResponse are correctly defined and exported here
+import * as api from '../services/api';
 import { parseRepomixFile, ParsedRepomixData } from '../utils/parseRepomix';
-import type { RepoInfo } from '../RepoSelector'; // Assuming RepoInfo is { filename: string; repoIdentifier: string; }
+import type { RepoInfo } from '../RepoSelector';
 import { useAuth } from './AuthContext';
+import { parseRepoInfoFromFilename } from '../utils/filenameUtils'; // ++ Import the new utility
 
 interface RepomixState {
     availableRepos: RepoInfo[];
     selectedRepoFile: string | null;
     parsedRepomixData: ParsedRepomixData | null;
-    isLoading: boolean; // General loading for context operations (generation, listing, loading content)
-    error: string | null; // General error message for Repomix operations
-    attachmentStatus: string | null; // Specific status for file attach/parse/generation messages
+    isLoading: boolean;
+    error: string | null;
+    attachmentStatus: string | null;
     selectedFilePathForView: string | null;
     selectedFileContentForView: string | null;
     promptSelectedFilePaths: string[];
     allFilePathsInCurrentRepomix: string[];
+    repoUrl: string; // ++ Add repoUrl for the form
 }
 
 interface RepomixActions {
@@ -24,11 +26,12 @@ interface RepomixActions {
     loadRepoFileContent: (filename: string) => Promise<boolean>;
     handleManualFileAttach: (file: File) => void;
     clearCurrentRepomixData: () => void;
-    deleteRepomixFile: (filename: string) => Promise<boolean>; // Action for deleting a file
+    deleteRepomixFile: (filename: string) => Promise<boolean>;
     selectFileForViewing: (filePath: string) => void;
     togglePromptSelectedFile: (filePath: string) => void;
     selectAllPromptFiles: () => void;
     deselectAllPromptFiles: () => void;
+    setRepoUrl: (url: string) => void; // ++ Add action to set repoUrl
 }
 
 type RepomixContextType = RepomixState & RepomixActions;
@@ -53,6 +56,7 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
         selectedFileContentForView: null,
         promptSelectedFilePaths: [],
         allFilePathsInCurrentRepomix: [],
+        repoUrl: '', // ++ Initialize repoUrl
     });
     const attachmentStatusTimer = useRef<number | null>(null);
 
@@ -61,7 +65,7 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
         setState(prev => ({
             ...prev,
             attachmentStatus: message,
-            error: isErrorStatus ? message : prev.error // Set general error if status is an error, else keep existing
+            error: isErrorStatus ? message : prev.error
         }));
         if (message) {
             attachmentStatusTimer.current = window.setTimeout(() => {
@@ -79,11 +83,15 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
             selectedFileContentForView: null,
             promptSelectedFilePaths: [],
             allFilePathsInCurrentRepomix: [],
-            error: keepError ? prev.error : null, // Optionally keep existing general error
+            repoUrl: '', // ++ Clear repoUrl here
+            error: keepError ? prev.error : null,
         }));
-        if (!keepError) setAttachmentStatusWithTimeout(null); // Clear status message if not keeping error
+        if (!keepError) setAttachmentStatusWithTimeout(null);
     }, [setAttachmentStatusWithTimeout]);
 
+    const setRepoUrl = useCallback((url: string) => { // ++ Implement setRepoUrl action
+        setState(prev => ({ ...prev, repoUrl: url }));
+    }, []);
 
     const fetchAvailableRepos = useCallback(async () => {
         if (!session || authIsLoading) {
@@ -106,15 +114,26 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     const loadRepoFileContent = useCallback(async (filename: string): Promise<boolean> => {
         if (!session) {
-            setState(prev => ({ ...prev, error: "Authentication required to load file." }));
+            setState(prev => ({ ...prev, error: "Authentication required to load file.", repoUrl: '' })); // ++ Clear repoUrl
             return false;
         }
-        if (!filename) {
-            clearCurrentRepomixData();
+        if (!filename) { // This handles deselection (empty filename)
+            clearCurrentRepomixData(); // This will clear repoUrl
             return false;
         }
         setState(prev => ({ ...prev, isLoading: true, error: null, selectedRepoFile: filename }));
         setAttachmentStatusWithTimeout(`Attaching ${filename}...`);
+
+        // ++ Parse filename to extract owner and repo for the URL
+        const repoDetails = parseRepoInfoFromFilename(filename);
+        if (repoDetails) {
+            const newRepoUrl = `https://github.com/${repoDetails.owner}/${repoDetails.repoName}.git`;
+            setState(prev => ({ ...prev, repoUrl: newRepoUrl }));
+        } else {
+            setState(prev => ({ ...prev, repoUrl: '' })); // Clear URL if parsing fails
+            console.warn(`Could not parse owner/repo from filename: ${filename}`);
+        }
+        // --
 
         const result = await api.getFileContent(filename);
         if (result.success && result.content) {
@@ -126,13 +145,19 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
                 allFilePathsInCurrentRepomix: allPaths,
                 promptSelectedFilePaths: allPaths,
                 isLoading: false,
-                error: null, // Clear previous error on successful load
+                error: null,
             }));
             setAttachmentStatusWithTimeout(parsedData ? `Attached & Parsed ${filename}` : `Attached ${filename} (non-standard format or parse error)`);
             return true;
         } else {
-            setState(prev => ({ ...prev, isLoading: false, selectedRepoFile: null, error: result.error || `Failed to load ${filename}` }));
-            clearCurrentRepomixData(true); // Keep the error from the failed load
+            setState(prev => ({
+                ...prev,
+                isLoading: false,
+                selectedRepoFile: null, // Deselect file on load failure
+                error: result.error || `Failed to load ${filename}`,
+                repoUrl: '' // ++ Clear repoUrl on failure
+            }));
+            clearCurrentRepomixData(true); // Keep error, but clear data (repoUrl already cleared above)
             setAttachmentStatusWithTimeout(`Failed to attach ${filename}: ${result.error}`, true, 5000);
             return false;
         }
@@ -143,8 +168,11 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
             setState(prev => ({ ...prev, error: "Authentication required to generate file." }));
             return;
         }
-        setState(prev => ({ ...prev, isLoading: true, error: null })); // Set general loading, clear error
-        clearCurrentRepomixData(); // Clear previous file data
+        // ++ When generating, the repoUrl is already in state via the form, or passed here.
+        // We should ensure the context's repoUrl matches what's being generated.
+        setState(prev => ({ ...prev, isLoading: true, error: null, repoUrl: repoUrl }));
+        clearCurrentRepomixData(); // Clear previous file data but keep the new repoUrl
+        setState(prev => ({...prev, repoUrl: repoUrl})); // Ensure repoUrl from argument is set for sure
         setAttachmentStatusWithTimeout(`Generating Repomix file for ${repoUrl}...`);
 
         const result: api.RunRepomixResponse = await api.runRepomix({ repoUrl, includePatterns: include, excludePatterns: exclude });
@@ -157,14 +185,12 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
             setState(prev => ({
                 ...prev,
                 availableRepos: [newRepoInfo, ...prev.availableRepos.filter(r => r.filename !== newRepoInfo.filename)],
-                isLoading: false, // Main generation is done, loading content is next
+                isLoading: false,
             }));
             setAttachmentStatusWithTimeout(result.data.message || `Generated ${newRepoInfo.filename}. Loading content...`);
-            const loaded = await loadRepoFileContent(newRepoInfo.filename); // loadRepoFileContent sets its own isLoading and status
+            const loaded = await loadRepoFileContent(newRepoInfo.filename);
             if (!loaded) {
-                // Error/status already handled by loadRepoFileContent
-                // Optionally, fetch all repos again if auto-load fails to ensure list consistency
-                // await fetchAvailableRepos();
+                // error handled by loadRepoFileContent
             }
         } else {
             const errorMessage = result.error || (result.data && !result.data.newFile ? "Repomix response missing new file data." : "Repomix generation failed.");
@@ -175,7 +201,7 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
 
 
     const handleManualFileAttach = useCallback((file: File) => {
-        setState(prev => ({ ...prev, isLoading: true, error: null, selectedRepoFile: null }));
+        setState(prev => ({ ...prev, isLoading: true, error: null, selectedRepoFile: null, repoUrl: '' })); // ++ Clear repoUrl
         clearCurrentRepomixData();
         setAttachmentStatusWithTimeout(`Attaching ${file.name}...`);
         const reader = new FileReader();
@@ -215,6 +241,7 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
         const result: api.DeleteFileApiResponse = await api.deleteGeneratedFile(filename);
 
         if (result.success) {
+            const wasSelectedRepoUrl = state.selectedRepoFile === filename ? '' : state.repoUrl; // ++ Clear repoUrl if deleted file was the source
             setState(prev => ({
                 ...prev,
                 availableRepos: prev.availableRepos.filter(repo => repo.filename !== filename),
@@ -226,6 +253,7 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
                 selectedFileContentForView: prev.selectedRepoFile === filename ? null : prev.selectedFileContentForView,
                 promptSelectedFilePaths: prev.selectedRepoFile === filename ? [] : prev.promptSelectedFilePaths,
                 allFilePathsInCurrentRepomix: prev.selectedRepoFile === filename ? [] : prev.allFilePathsInCurrentRepomix,
+                repoUrl: wasSelectedRepoUrl, // ++ Update repoUrl
             }));
             setAttachmentStatusWithTimeout(result.message || `File ${filename} deleted successfully.`);
             return true;
@@ -234,7 +262,7 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
             setAttachmentStatusWithTimeout(`Failed to delete ${filename}: ${result.error || 'Unknown error'}`, true, 5000);
             return false;
         }
-    }, [session, setAttachmentStatusWithTimeout]);
+    }, [session, setAttachmentStatusWithTimeout, state.selectedRepoFile, state.repoUrl]); // ++ Added state dependencies for repoUrl update
 
 
     const selectFileForViewing = useCallback((filePath: string) => {
@@ -272,7 +300,7 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     return (
         <RepomixContext.Provider value={{
-            ...state,
+            ...state, // repoUrl is in here
             fetchAvailableRepos,
             generateRepomixFile,
             loadRepoFileContent,
@@ -283,6 +311,7 @@ export const RepomixProvider: React.FC<{ children: ReactNode }> = ({ children })
             togglePromptSelectedFile,
             selectAllPromptFiles,
             deselectAllPromptFiles,
+            setRepoUrl, // ++ Add the new action to context value
         }}>
             {children}
         </RepomixContext.Provider>
