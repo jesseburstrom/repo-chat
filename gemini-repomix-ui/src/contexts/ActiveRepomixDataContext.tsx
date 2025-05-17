@@ -11,12 +11,16 @@ import * as api from "../services/api";
 import { parseRepomixFile, ParsedRepomixData } from "../utils/parseRepomix";
 import { useAuth } from "./AuthContext"; // For auth checks if API calls need it
 
+// Internal helper function, not exported from this module
 const getAllFilePathsFromParsedData = (
   data: ParsedRepomixData | null
 ): string[] => {
   if (!data || !data.directoryStructure || !data.fileContents) return [];
+  // Correctly use Object.prototype.hasOwnProperty.call
   return data.directoryStructure.filter(
-    (p) => data.fileContents.hasOwnProperty(p) && !p.endsWith("/")
+    (p) =>
+      Object.prototype.hasOwnProperty.call(data.fileContents, p) &&
+      !p.endsWith("/")
   );
 };
 
@@ -55,7 +59,7 @@ const ActiveRepomixDataContext = createContext<
 export const ActiveRepomixDataProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const { session } = useAuth(); // For API calls that need auth
+  const { session } = useAuth();
   const [state, setState] = useState<ActiveRepomixDataState>({
     activeRepomixSource: null,
     parsedRepomixData: null,
@@ -82,7 +86,7 @@ export const ActiveRepomixDataProvider: React.FC<{ children: ReactNode }> = ({
       setState((prev) => ({
         ...prev,
         attachmentStatus: message,
-        dataError: isError ? message || prev.dataError : prev.dataError, // Only set dataError if isError is true
+        dataError: isError ? message || prev.dataError : prev.dataError,
       }));
       if (message) {
         attachmentStatusTimer.current = window.setTimeout(() => {
@@ -132,7 +136,7 @@ export const ActiveRepomixDataProvider: React.FC<{ children: ReactNode }> = ({
       return !!parsedData;
     },
     [setAttachmentStatusWithTimeout]
-  ); // setState is stable and can be omitted
+  );
 
   const loadAndParseDataFromServerFile = useCallback(
     async (filename: string): Promise<boolean> => {
@@ -144,7 +148,7 @@ export const ActiveRepomixDataProvider: React.FC<{ children: ReactNode }> = ({
         }));
         return false;
       }
-      clearActiveData(); // Clear previous before loading new
+      clearActiveData();
       setState((prev) => ({ ...prev, isLoadingData: true, dataError: null }));
       setAttachmentStatusWithTimeout(`Loading ${filename}...`);
 
@@ -275,6 +279,9 @@ export const ActiveRepomixDataProvider: React.FC<{ children: ReactNode }> = ({
   );
 };
 
+// Disable the rule for this specific hook export as it's a common pattern
+// for context providers and their consumer hooks to be in the same file.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useActiveRepomixData = () => {
   const context = useContext(ActiveRepomixDataContext);
   if (!context)
